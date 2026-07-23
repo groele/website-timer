@@ -1,4 +1,4 @@
-// 网站使用时长统计后台脚本 (旗舰增强版)
+// 网站使用时长统计后台脚本 (时间轴日志增强版)
 
 class WebsiteTimer {
   constructor() {
@@ -8,7 +8,6 @@ class WebsiteTimer {
     this.isUserActive = true;
     this.currentDay = this.getTodayKey();
     
-    // 默认配置
     this.defaultSettings = {
       blackList: ['newtab', 'extensions', 'devtools', 'localhost', '127.0.0.1'],
       minTimeThreshold: 5000,
@@ -215,6 +214,7 @@ class WebsiteTimer {
     }
   }
 
+  // 保存时间记录并写入时间轴日志
   async saveTimeSpent() {
     if (!this.activeTabInfo || !this.lastActiveTime || this.settings.isPaused) {
       return;
@@ -241,7 +241,9 @@ class WebsiteTimer {
       this.currentDay = today;
     }
 
-    const currentHour = new Date().getHours();
+    const now = new Date();
+    const currentHour = now.getHours();
+    const timeString = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 
     try {
       const result = await chrome.storage.local.get([this.currentDay]);
@@ -267,6 +269,34 @@ class WebsiteTimer {
       todayData[domain].hourlyUsage[currentHour] = (todayData[domain].hourlyUsage[currentHour] || 0) + timeSpent;
       todayData[domain].lastTitle = this.activeTabInfo.title || domain;
       todayData[domain].lastVisit = Date.now();
+
+      // 写入时间轴事件列表 (_timeline)
+      if (!todayData._timeline) {
+        todayData._timeline = [];
+      }
+
+      const category = this.getDomainCategory(domain);
+      const lastEvent = todayData._timeline[todayData._timeline.length - 1];
+
+      // 如果同网站且同标题且时间间隔小于 2 分钟，则直接合并延长上条记录
+      if (lastEvent && lastEvent.domain === domain && (Date.now() - lastEvent.timestamp < 120000)) {
+        lastEvent.durationMs += timeSpent;
+        lastEvent.timestamp = Date.now();
+      } else {
+        todayData._timeline.push({
+          time: timeString,
+          timestamp: Date.now(),
+          domain: domain,
+          title: this.activeTabInfo.title || domain,
+          durationMs: timeSpent,
+          category: category
+        });
+
+        // 时间轴最多保留最新 100 条记录
+        if (todayData._timeline.length > 100) {
+          todayData._timeline.shift();
+        }
+      }
 
       await chrome.storage.local.set({ [this.currentDay]: todayData });
       
@@ -337,7 +367,9 @@ class WebsiteTimer {
 
     if (limits.global && limits.global > 0) {
       let totalMs = 0;
-      Object.values(todayData).forEach(d => { totalMs += d.timeSpent || 0; });
+      Object.entries(todayData).forEach(([k, d]) => {
+        if (k !== '_timeline') totalMs += (d.timeSpent || 0);
+      });
       
       const globalNotifiedKey = `${todayKey}_global`;
       if (totalMs >= limits.global && !notified[globalNotifiedKey]) {
@@ -355,7 +387,6 @@ class WebsiteTimer {
       const domainSpentMs = todayData[domain]?.timeSpent || 0;
       const pct = Math.floor((domainSpentMs / domainLimitMs) * 100);
 
-      // 1. 80% 温柔预警通知与网页内浮条
       const warn80Key = `${todayKey}_${domain}_80`;
       if (pct >= 80 && pct < 100 && !notified[warn80Key]) {
         this.sendInPageBanner(domain, Math.round(domainSpentMs / 60000), Math.round(domainLimitMs / 60000), pct);
@@ -363,7 +394,6 @@ class WebsiteTimer {
         chrome.storage.local.set({ timer_settings: { ...this.settings, notifiedLimits: notified } });
       }
 
-      // 2. 100% 满额通知与网页内浮条
       const domainNotifiedKey = `${todayKey}_${domain}`;
       if (domainSpentMs >= domainLimitMs && !notified[domainNotifiedKey]) {
         this.sendNotification(
@@ -377,7 +407,6 @@ class WebsiteTimer {
     }
   }
 
-  // 向当前活动网页 Tab 发送网页内 Banner 提醒
   sendInPageBanner(domain, currentMins, limitMins, percent) {
     if (this.activeTabInfo && this.activeTabInfo.tabId) {
       chrome.tabs.sendMessage(this.activeTabInfo.tabId, {
@@ -417,7 +446,9 @@ class WebsiteTimer {
       }
 
       let totalMs = 0;
-      Object.values(todayData).forEach(d => { totalMs += d.timeSpent || 0; });
+      Object.entries(todayData).forEach(([k, d]) => {
+        if (k !== '_timeline') totalMs += (d.timeSpent || 0);
+      });
 
       if (totalMs === 0) {
         chrome.action.setBadgeText({ text: '' });

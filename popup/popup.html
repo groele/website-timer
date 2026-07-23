@@ -127,11 +127,18 @@
           </div>
         </div>
 
-        <!-- 搜索与分类过滤栏 -->
+        <!-- 视图与过滤工具栏 -->
         <div class="filter-toolbar">
+          <div class="view-switch-row">
+            <div class="view-pills">
+              <button class="view-btn active" data-view="list">📋 网站排行</button>
+              <button class="view-btn" data-view="timeline">📜 24小时时间轴日志</button>
+            </div>
+          </div>
+
           <div class="search-box">
             <span class="search-icon">🔍</span>
-            <input type="text" id="searchSiteInput" placeholder="搜索域名或页面标题... (悬浮操作/点击看详情)">
+            <input type="text" id="searchSiteInput" placeholder="搜索域名或页面标题... (点击查看下钻)">
           </div>
           
           <div class="filter-row">
@@ -151,18 +158,25 @@
           </div>
         </div>
 
-        <!-- 网站列表 -->
-        <div class="websites-container">
+        <!-- 网站排行列表 -->
+        <div class="websites-container" id="listViewSection">
           <div id="websitesList" class="websites-list">
             <!-- 列表项动态渲染 -->
           </div>
+        </div>
 
-          <!-- 空状态 -->
-          <div id="emptyState" class="empty-state" style="display: none;">
-            <div class="empty-icon">📊</div>
-            <p>暂无浏览统计记录</p>
-            <p class="empty-hint">开始浏览网页后，统计数据将自动展现于此</p>
+        <!-- 📜 24小时时间轴日志视图 -->
+        <div class="websites-container" id="timelineViewSection" style="display: none;">
+          <div id="timelineList" class="timeline-list">
+            <!-- 垂直时间轴记录 -->
           </div>
+        </div>
+
+        <!-- 空状态 -->
+        <div id="emptyState" class="empty-state" style="display: none;">
+          <div class="empty-icon">📊</div>
+          <p>暂无浏览统计记录</p>
+          <p class="empty-hint">开始浏览网页后，统计数据将自动展现于此</p>
         </div>
       </section>
 

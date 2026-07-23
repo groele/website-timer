@@ -1,4 +1,4 @@
-// 网站使用时长统计器 - 弹窗逻辑脚本 (旗舰全能版)
+// 网站使用时长统计器 - 弹窗逻辑脚本 (时间轴日志全能版)
 
 class PopupManager {
   constructor() {
@@ -6,6 +6,7 @@ class PopupManager {
     this.currentCategory = 'all';
     this.currentSort = 'time';
     this.currentChart = 'trend';
+    this.currentView = 'list'; // 'list' | 'timeline'
     this.searchQuery = '';
     
     this.rawData = {};
@@ -13,7 +14,7 @@ class PopupManager {
 
     this.pomodoro = {
       timerId: null,
-      secondsLeft: 1500, // 25 分钟
+      secondsLeft: 1500,
       isRunning: false
     };
 
@@ -41,15 +42,12 @@ class PopupManager {
 
   bindDOM() {
     this.elements = {
-      // 导航
       navBtns: document.querySelectorAll('.nav-btn'),
       tabContents: document.querySelectorAll('.tab-content'),
       
-      // 智能诊断洞察与热力图
       smartInsightsText: document.getElementById('smartInsightsText'),
       heatmapGrid: document.getElementById('heatmapGrid'),
 
-      // 统计指标
       periodBtns: document.querySelectorAll('.period-btn'),
       metricTotalTime: document.getElementById('metricTotalTime'),
       metricWeekTrend: document.getElementById('metricWeekTrend'),
@@ -60,26 +58,28 @@ class PopupManager {
       metricFocusScore: document.getElementById('metricFocusScore'),
       metricScoreRating: document.getElementById('metricScoreRating'),
       
-      // 图表区
       chartTitle: document.getElementById('chartTitle'),
       chartBtns: document.querySelectorAll('.chart-btn'),
       chartSvg: document.getElementById('chartSvg'),
       
-      // 过滤与搜索
+      // 视图切换
+      viewBtns: document.querySelectorAll('.view-btn'),
+      listViewSection: document.getElementById('listViewSection'),
+      timelineViewSection: document.getElementById('timelineViewSection'),
+      timelineList: document.getElementById('timelineList'),
+
       searchSiteInput: document.getElementById('searchSiteInput'),
       catPills: document.querySelectorAll('.cat-pill'),
       sortSelect: document.getElementById('sortSelect'),
       websitesList: document.getElementById('websitesList'),
       emptyState: document.getElementById('emptyState'),
       
-      // 番茄钟与打卡
       pomoTimerDisplay: document.getElementById('pomoTimerDisplay'),
       pomoStatusText: document.getElementById('pomoStatusText'),
       pomoStartBtn: document.getElementById('pomoStartBtn'),
       pomoResetBtn: document.getElementById('pomoResetBtn'),
       streakDaysVal: document.getElementById('streakDaysVal'),
 
-      // 限制与额度
       globalLimitInput: document.getElementById('globalLimitInput'),
       saveGlobalLimitBtn: document.getElementById('saveGlobalLimitBtn'),
       domainLimitName: document.getElementById('domainLimitName'),
@@ -87,7 +87,6 @@ class PopupManager {
       addDomainLimitBtn: document.getElementById('addDomainLimitBtn'),
       domainLimitsList: document.getElementById('domainLimitsList'),
       
-      // 设置项
       pauseTimerToggle: document.getElementById('pauseTimerToggle'),
       breakReminderSelect: document.getElementById('breakReminderSelect'),
       subdomainGroupToggle: document.getElementById('subdomainGroupToggle'),
@@ -101,7 +100,6 @@ class PopupManager {
       themeCards: document.querySelectorAll('.theme-card'),
       retentionSelect: document.getElementById('retentionSelect'),
       
-      // 数据管理
       exportDataBtn: document.getElementById('exportDataBtn'),
       exportCsvBtn: document.getElementById('exportCsvBtn'),
       importDataBtn: document.getElementById('importDataBtn'),
@@ -110,13 +108,11 @@ class PopupManager {
       resetTodayBtn: document.getElementById('resetTodayBtn'),
       clearAllBtn: document.getElementById('clearAllBtn'),
       
-      // 页脚与 Toast
       currentDateDisplay: document.getElementById('currentDateDisplay'),
       lastUpdateTime: document.getElementById('lastUpdateTime'),
       refreshDataBtn: document.getElementById('refreshDataBtn'),
       toastContainer: document.getElementById('toastContainer'),
       
-      // 单站下钻弹框
       domainDetailModal: document.getElementById('domainDetailModal'),
       closeDetailModal: document.getElementById('closeDetailModal'),
       detailDomainName: document.getElementById('detailDomainName'),
@@ -125,7 +121,6 @@ class PopupManager {
       detailAvgSession: document.getElementById('detailAvgSession'),
       detailChartSvg: document.getElementById('detailChartSvg'),
 
-      // 通用模态框
       modalOverlay: document.getElementById('modalOverlay'),
       modalTitle: document.getElementById('modalTitle'),
       modalMessage: document.getElementById('modalMessage'),
@@ -154,6 +149,24 @@ class PopupManager {
       });
     });
 
+    // 视图切换按钮 (排行榜 vs 时间轴)
+    this.elements.viewBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.elements.viewBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentView = btn.dataset.view;
+
+        if (this.currentView === 'list') {
+          this.elements.listViewSection.style.display = 'block';
+          this.elements.timelineViewSection.style.display = 'none';
+        } else {
+          this.elements.listViewSection.style.display = 'none';
+          this.elements.timelineViewSection.style.display = 'block';
+          this.renderTimeline();
+        }
+      });
+    });
+
     this.elements.chartBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         this.elements.chartBtns.forEach(b => b.classList.remove('active'));
@@ -165,7 +178,11 @@ class PopupManager {
 
     this.elements.searchSiteInput.addEventListener('input', (e) => {
       this.searchQuery = e.target.value.trim().toLowerCase();
-      this.renderWebsitesList();
+      if (this.currentView === 'list') {
+        this.renderWebsitesList();
+      } else {
+        this.renderTimeline();
+      }
     });
 
     this.elements.catPills.forEach(pill => {
@@ -173,7 +190,11 @@ class PopupManager {
         this.elements.catPills.forEach(p => p.classList.remove('active'));
         pill.classList.add('active');
         this.currentCategory = pill.dataset.cat;
-        this.renderWebsitesList();
+        if (this.currentView === 'list') {
+          this.renderWebsitesList();
+        } else {
+          this.renderTimeline();
+        }
       });
     });
 
@@ -336,7 +357,12 @@ class PopupManager {
     this.renderMetrics(dates, aggregatedDomains);
     this.renderSmartInsights(aggregatedDomains);
     this.renderChartSection(periodData, aggregatedDomains);
-    this.renderWebsitesList(aggregatedDomains);
+    
+    if (this.currentView === 'list') {
+      this.renderWebsitesList(aggregatedDomains);
+    } else {
+      this.renderTimeline();
+    }
   }
 
   getProcessedPeriodData() {
@@ -364,6 +390,8 @@ class PopupManager {
       let dayTotal = 0;
 
       Object.entries(dayObj).forEach(([domain, data]) => {
+        if (domain === '_timeline') return; // 跳过时间轴特殊字段
+
         const timeSpent = data.timeSpent || 0;
         const visits = data.visits || 0;
         const category = this.settings.customCategories?.[domain] || data.category || 'other';
@@ -401,7 +429,62 @@ class PopupManager {
     return { dates, aggregatedDomains, periodData };
   }
 
-  // 生成智能习惯诊断建议
+  // 📜 渲染 24小时 Chronological 浏览时间轴日志
+  renderTimeline() {
+    const { dates } = this.getProcessedPeriodData();
+    let events = [];
+
+    dates.forEach(dKey => {
+      const dayObj = this.rawData[dKey] || {};
+      const timelineArr = dayObj._timeline || [];
+      events = events.concat(timelineArr);
+    });
+
+    // 过滤分类
+    if (this.currentCategory !== 'all') {
+      events = events.filter(e => e.category === this.currentCategory);
+    }
+
+    // 过滤搜索关键字
+    if (this.searchQuery) {
+      events = events.filter(e => 
+        e.domain.toLowerCase().includes(this.searchQuery) ||
+        (e.title && e.title.toLowerCase().includes(this.searchQuery))
+      );
+    }
+
+    // 按时间倒序
+    events.sort((a, b) => b.timestamp - a.timestamp);
+
+    const container = this.elements.timelineList;
+    const emptyState = this.elements.emptyState;
+
+    if (events.length === 0) {
+      container.innerHTML = '';
+      emptyState.style.display = 'flex';
+      return;
+    }
+
+    emptyState.style.display = 'none';
+
+    container.innerHTML = events.map(ev => {
+      const durStr = this.formatDuration(ev.durationMs);
+      return `
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-time">${ev.time || '12:00'}</div>
+          <div class="timeline-content">
+            <div class="timeline-header-row">
+              <span class="timeline-domain">${ev.domain}</span>
+              <span class="timeline-dur">+${durStr}</span>
+            </div>
+            <div class="timeline-page-title truncate">${ev.title || ev.domain}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   renderSmartInsights(aggregatedDomains) {
     const list = Object.values(aggregatedDomains);
     let totalMs = 0;
@@ -430,12 +513,11 @@ class PopupManager {
     }
   }
 
-  // 渲染 GitHub 风格 365 天年度浏览热力图
   renderHeatmap() {
     const grid = this.elements.heatmapGrid;
     grid.innerHTML = '';
 
-    const daysCount = 140; // 呈现 140 天 (约 20 周)
+    const daysCount = 140;
     const heatData = [];
     let maxMs = 1;
 
@@ -443,7 +525,9 @@ class PopupManager {
       const dKey = this.getDateKeyOffset(i);
       const dayObj = this.rawData[dKey] || {};
       let totalMs = 0;
-      Object.values(dayObj).forEach(v => totalMs += (v.timeSpent || 0));
+      Object.entries(dayObj).forEach(([k, v]) => {
+        if (k !== '_timeline') totalMs += (v.timeSpent || 0);
+      });
       if (totalMs > maxMs) maxMs = totalMs;
       heatData.push({ dKey, totalMs });
     }
@@ -500,11 +584,11 @@ class PopupManager {
     for (let i = 0; i < 7; i++) {
       const dKeyCurr = this.getDateKeyOffset(i);
       const dayCurr = this.rawData[dKeyCurr] || {};
-      Object.values(dayCurr).forEach(v => currWeekMs += (v.timeSpent || 0));
+      Object.entries(dayCurr).forEach(([k, v]) => { if (k !== '_timeline') currWeekMs += (v.timeSpent || 0); });
 
       const dKeyPrev = this.getDateKeyOffset(i + 7);
       const dayPrev = this.rawData[dKeyPrev] || {};
-      Object.values(dayPrev).forEach(v => prevWeekMs += (v.timeSpent || 0));
+      Object.entries(dayPrev).forEach(([k, v]) => { if (k !== '_timeline') prevWeekMs += (v.timeSpent || 0); });
     }
 
     if (prevWeekMs === 0) {
@@ -766,7 +850,6 @@ class PopupManager {
     });
   }
 
-  // 渲染网站排行列表 (带 Hover 快捷动作按钮)
   renderWebsitesList(aggregatedDomains = null) {
     if (!aggregatedDomains) {
       aggregatedDomains = this.getProcessedPeriodData().aggregatedDomains;
@@ -838,7 +921,6 @@ class PopupManager {
             </div>
           </div>
 
-          <!-- Hover 快捷工具栏 -->
           <div class="hover-actions" onclick="event.stopPropagation();">
             <button class="hover-btn" title="一键设为30分钟限制" data-quick-limit="${item.domain}">🛑 30m</button>
             <button class="hover-btn" title="一键加入黑名单" data-quick-black="${item.domain}">🛡️ 屏蔽</button>
@@ -854,13 +936,12 @@ class PopupManager {
       });
     });
 
-    // 绑定 Hover 快捷按钮事件
     container.querySelectorAll('[data-quick-limit]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const domain = e.target.dataset.quickLimit;
         if (!this.settings.dailyLimits) this.settings.dailyLimits = { domains: {} };
         if (!this.settings.dailyLimits.domains) this.settings.dailyLimits.domains = {};
-        this.settings.dailyLimits.domains[domain] = 1800000; // 30 分钟
+        this.settings.dailyLimits.domains[domain] = 1800000;
         this.updateSetting('dailyLimits', this.settings.dailyLimits);
         this.renderDomainLimitsList();
         this.showToast(`已快捷限制 ${domain} 每日 30 分钟`, 'success');
@@ -1137,7 +1218,6 @@ class PopupManager {
     });
   }
 
-  // 🧹 一键清理少于 10 秒的微小记录
   async purgeShortVisits() {
     try {
       let purgedCount = 0;
@@ -1150,7 +1230,11 @@ class PopupManager {
         let modified = false;
 
         Object.entries(dayData).forEach(([domain, data]) => {
-          if (data.timeSpent >= 10000) { // 10秒
+          if (domain === '_timeline') {
+            cleaned._timeline = data;
+            return;
+          }
+          if (data.timeSpent >= 10000) {
             cleaned[domain] = data;
           } else {
             purgedCount++;
