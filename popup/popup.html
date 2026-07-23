@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网站使用时长统计器</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body data-theme="sunset">
+  <div class="app-container">
+    <!-- 顶栏与导航 -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-icon">⏱️</span>
+        <span class="brand-name">网页计时器</span>
+      </div>
+      
+      <div class="nav-tabs">
+        <button class="nav-btn active" data-tab="statsTab">
+          <span class="tab-icon">📊</span>
+          <span class="tab-label">统计</span>
+        </button>
+        <button class="nav-btn" data-tab="limitsTab">
+          <span class="tab-icon">🎯</span>
+          <span class="tab-label">专注&限制</span>
+        </button>
+        <button class="nav-btn" data-tab="settingsTab">
+          <span class="tab-icon">⚙️</span>
+          <span class="tab-label">设置</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <main class="app-content">
+
+      <!-- TAB 1: 📊 统计大盘 -->
+      <section id="statsTab" class="tab-content active">
+        <!-- 时间段切换 Pills -->
+        <div class="period-selector">
+          <button class="period-btn active" data-period="today">今日</button>
+          <button class="period-btn" data-period="yesterday">昨日</button>
+          <button class="period-btn" data-period="week">近7天</button>
+          <button class="period-btn" data-period="month">近30天</button>
+          <button class="period-btn" data-period="all">全部</button>
+        </div>
+
+        <!-- 关键数据卡片Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card highlight">
+            <div class="card-icon">⏱️</div>
+            <div class="card-info">
+              <div class="card-label">总浏览时长</div>
+              <div class="card-value" id="metricTotalTime">0分钟</div>
+              <div class="card-subtext" id="metricWeekTrend">较上周 --</div>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <div class="card-icon">📅</div>
+            <div class="card-info">
+              <div class="card-label">日均时长</div>
+              <div class="card-value" id="metricDailyAvg">0分钟</div>
+              <div class="card-subtext" id="metricDaysCount">共 1 天</div>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <div class="card-icon">🏆</div>
+            <div class="card-info">
+              <div class="card-label">最常访问</div>
+              <div class="card-value truncate" id="metricTopSite">暂无</div>
+              <div class="card-subtext" id="metricTopTime">--</div>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <div class="card-icon">⚡</div>
+            <div class="card-info">
+              <div class="card-label">专注得分</div>
+              <div class="card-value" id="metricFocusScore">100分</div>
+              <div class="card-subtext" id="metricScoreRating">高效专注</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SVG 趋势/分布图表区 -->
+        <div class="chart-box">
+          <div class="chart-header">
+            <span class="chart-title" id="chartTitle">每日浏览趋势</span>
+            <div class="chart-switch">
+              <button class="chart-btn active" data-chart="trend">趋势</button>
+              <button class="chart-btn" data-chart="hourly">24h分布</button>
+              <button class="chart-btn" data-chart="category">分类</button>
+              <button class="chart-btn" data-chart="donut">🍩环形</button>
+            </div>
+          </div>
+          <div class="chart-container">
+            <svg id="chartSvg" viewBox="0 0 360 120" preserveAspectRatio="none">
+              <!-- SVG 动态绘制 -->
+            </svg>
+          </div>
+        </div>
+
+        <!-- 搜索与分类过滤栏 -->
+        <div class="filter-toolbar">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchSiteInput" placeholder="搜索域名或页面标题... (点击结果下钻看详情)">
+          </div>
+          
+          <div class="filter-row">
+            <div class="category-pills">
+              <button class="cat-pill active" data-cat="all">全部</button>
+              <button class="cat-pill" data-cat="work">💻工作</button>
+              <button class="cat-pill" data-cat="social">💬社交</button>
+              <button class="cat-pill" data-cat="video">📹视频</button>
+              <button class="cat-pill" data-cat="shopping">🛍️购物</button>
+              <button class="cat-pill" data-cat="news">📰资讯</button>
+            </div>
+
+            <select id="sortSelect" class="sort-select">
+              <option value="time">按时长排序</option>
+              <option value="visits">按次数排序</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 网站列表 -->
+        <div class="websites-container">
+          <div id="websitesList" class="websites-list">
+            <!-- 列表项动态渲染 -->
+          </div>
+
+          <!-- 空状态 -->
+          <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-icon">📊</div>
+            <p>暂无浏览统计记录</p>
+            <p class="empty-hint">开始浏览网页后，统计数据将自动展现于此</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: 🎯 专注与限制 -->
+      <section id="limitsTab" class="tab-content">
+        <!-- 番茄钟专注模式 -->
+        <div class="section-card pomodoro-card">
+          <div class="card-header-title">
+            <span class="header-icon">🍅</span>
+            <h3>番茄钟专注模式</h3>
+          </div>
+          <p class="section-desc">开启 25 分钟沉浸专注，减少无意义的娱乐网站浏览。</p>
+
+          <div class="pomodoro-display">
+            <div class="timer-digits" id="pomoTimerDisplay">25:00</div>
+            <div class="timer-status" id="pomoStatusText">准备就绪</div>
+          </div>
+
+          <div class="pomo-controls">
+            <button id="pomoStartBtn" class="btn btn-primary btn-glow">开始专注</button>
+            <button id="pomoResetBtn" class="btn btn-secondary">重置</button>
+          </div>
+        </div>
+
+        <!-- 每日全局浏览限制 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">⏰</span>
+            <h3>每日浏览总时长上限</h3>
+          </div>
+          <p class="section-desc">达到设定时长后将收到系统桌面通知提醒。</p>
+
+          <div class="form-row">
+            <label for="globalLimitInput">每日限制(分钟):</label>
+            <input type="number" id="globalLimitInput" min="0" max="1440" placeholder="0 表示不限制">
+            <button id="saveGlobalLimitBtn" class="btn btn-primary">保存设置</button>
+          </div>
+        </div>
+
+        <!-- 特定域名限额设置 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">🛑</span>
+            <h3>特定网站每日限制</h3>
+          </div>
+
+          <div class="form-inline-group">
+            <input type="text" id="domainLimitName" placeholder="例如: bilibili.com">
+            <input type="number" id="domainLimitTime" placeholder="限额(分钟)" min="1" style="width: 100px;">
+            <button id="addDomainLimitBtn" class="btn btn-primary">添加限制</button>
+          </div>
+
+          <div class="limits-list" id="domainLimitsList">
+            <!-- 动态渲染限制项 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: ⚙️ 设置与偏好 -->
+      <section id="settingsTab" class="tab-content">
+        <!-- 暂停/恢复计时 -->
+        <div class="section-card switch-card">
+          <div class="switch-info">
+            <div class="switch-title">⏸️ 暂停网页时长统计</div>
+            <div class="switch-desc">开启后将暂时停止记录任何网页耗时。</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="pauseTimerToggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- 连续上网护眼/久坐提醒 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">🍵</span>
+            <h3>连续上网护眼提醒</h3>
+          </div>
+          <div class="form-row">
+            <select id="breakReminderSelect" class="form-select">
+              <option value="0">关闭连续提醒</option>
+              <option value="30">连续上网 30 分钟提醒</option>
+              <option value="45" selected>连续上网 45 分钟提醒 (默认)</option>
+              <option value="60">连续上网 60 分钟提醒</option>
+              <option value="90">连续上网 90 分钟提醒</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 子域名自动合并 -->
+        <div class="section-card switch-card">
+          <div class="switch-info">
+            <div class="switch-title">🌐 自动合并子域名到主域名</div>
+            <div class="switch-desc">如合并 docs.qq.com 到 qq.com</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="subdomainGroupToggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- 自定义网站分类 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">🏷️</span>
+            <h3>自定义网站分类归属</h3>
+          </div>
+          <p class="section-desc">手动指定域名的类别（如将 bilibili.com 改为工作）。</p>
+
+          <div class="form-inline-group">
+            <input type="text" id="customCatName" placeholder="域名如: bilibili.com">
+            <select id="customCatSelect" style="width: 110px;">
+              <option value="work">💻工作学习</option>
+              <option value="social">💬社交通讯</option>
+              <option value="video">📹视频娱乐</option>
+              <option value="shopping">🛍️购物消费</option>
+              <option value="news">📰新闻资讯</option>
+            </select>
+            <button id="addCustomCatBtn" class="btn btn-primary">设定</button>
+          </div>
+
+          <div class="tag-cloud" id="customCatTags">
+            <!-- 动态标签 -->
+          </div>
+        </div>
+
+        <!-- 域名黑名单 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">🛡️</span>
+            <h3>域名黑名单 / 忽略列表</h3>
+          </div>
+          <p class="section-desc">匹配黑名单的域名将彻底忽略，不录入统计。</p>
+
+          <div class="form-inline-group">
+            <input type="text" id="blacklistInput" placeholder="输入域名，如 localhost 或 taobao.com">
+            <button id="addBlacklistBtn" class="btn btn-primary">添加</button>
+          </div>
+
+          <div class="tag-cloud" id="blacklistTags">
+            <!-- 动态标签 -->
+          </div>
+        </div>
+
+        <!-- 主题切换 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">🎨</span>
+            <h3>主题风格</h3>
+          </div>
+
+          <div class="theme-grid">
+            <div class="theme-card active" data-theme-val="sunset">
+              <div class="theme-preview sunset-preview"></div>
+              <span>🌅 暖阳渐变</span>
+            </div>
+            <div class="theme-card" data-theme-val="dark">
+              <div class="theme-preview dark-preview"></div>
+              <span>🌌 深海暗黑</span>
+            </div>
+            <div class="theme-card" data-theme-val="mint">
+              <div class="theme-preview mint-preview"></div>
+              <span>🍃 极简薄荷</span>
+            </div>
+            <div class="theme-card" data-theme-val="purple">
+              <div class="theme-preview purple-preview"></div>
+              <span>🔮 霓虹璀璨</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 保留策略与高级参数 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">⏳</span>
+            <h3>数据保留天数</h3>
+          </div>
+
+          <div class="form-row">
+            <select id="retentionSelect" class="form-select">
+              <option value="30">保留近 30 天数据</option>
+              <option value="90" selected>保留近 90 天数据 (默认)</option>
+              <option value="180">保留近 180 天数据</option>
+              <option value="0">永久保留历史数据</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 数据备份与管理 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">💾</span>
+            <h3>数据备份与报表</h3>
+          </div>
+
+          <div class="action-buttons-grid">
+            <button id="exportDataBtn" class="btn btn-secondary">📥 导出 JSON 数据</button>
+            <button id="exportCsvBtn" class="btn btn-secondary">📊 导出 CSV 报表</button>
+            <button id="importDataBtn" class="btn btn-secondary">📤 导入 JSON 数据</button>
+            <input type="file" id="importFileInput" accept=".json" style="display: none;">
+            <button id="resetTodayBtn" class="btn btn-danger-soft">🔄 清空今日数据</button>
+            <button id="clearAllBtn" class="btn btn-danger" style="grid-column: span 2;">🗑️ 重置所有历史数据</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- 底部状态栏 -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        <span id="currentDateDisplay">----年--月--日</span>
+      </div>
+      <div class="footer-right">
+        <button id="refreshDataBtn" class="icon-btn" title="手动刷新数据">🔄</button>
+        <span>更新于 <span id="lastUpdateTime">--:--</span></span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 全局 Toast 提示容器 -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- 单站历史下钻弹框 Drawer -->
+  <div id="domainDetailModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card detail-modal-card">
+      <div class="modal-header">
+        <h3 id="detailDomainName">domain.com</h3>
+        <button id="closeDetailModal" class="icon-btn">✕</button>
+      </div>
+      <div class="detail-body">
+        <div class="detail-metrics">
+          <div class="detail-metric-item">
+            <span class="detail-label">总浏览时间</span>
+            <span class="detail-val" id="detailTotalTime">0分钟</span>
+          </div>
+          <div class="detail-metric-item">
+            <span class="detail-label">总访问次数</span>
+            <span class="detail-val" id="detailVisits">0次</span>
+          </div>
+          <div class="detail-metric-item">
+            <span class="detail-label">单次平均停留</span>
+            <span class="detail-val" id="detailAvgSession">0秒</span>
+          </div>
+        </div>
+        <div class="detail-chart-box">
+          <div class="detail-chart-title">近7天每日浏览趋势</div>
+          <svg id="detailChartSvg" viewBox="0 0 280 80"></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用模态确认框 -->
+  <div id="modalOverlay" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <h3 id="modalTitle">确认操作</h3>
+      <p id="modalMessage">确定要执行此操作吗？</p>
+      <div class="modal-actions">
+        <button id="modalConfirmBtn" class="btn btn-danger">确认</button>
+        <button id="modalCancelBtn" class="btn btn-secondary">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
