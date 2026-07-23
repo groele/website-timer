@@ -1,4 +1,4 @@
-// 网站使用时长统计器 - 弹窗逻辑脚本 (时间轴日志全能版)
+// 网站使用时长统计器 - 弹窗逻辑脚本 (博士科研专属增强版)
 
 class PopupManager {
   constructor() {
@@ -51,8 +51,8 @@ class PopupManager {
       periodBtns: document.querySelectorAll('.period-btn'),
       metricTotalTime: document.getElementById('metricTotalTime'),
       metricWeekTrend: document.getElementById('metricWeekTrend'),
-      metricDailyAvg: document.getElementById('metricDailyAvg'),
-      metricDaysCount: document.getElementById('metricDaysCount'),
+      metricAcademicTime: document.getElementById('metricAcademicTime'),
+      metricAcademicCount: document.getElementById('metricAcademicCount'),
       metricTopSite: document.getElementById('metricTopSite'),
       metricTopTime: document.getElementById('metricTopTime'),
       metricFocusScore: document.getElementById('metricFocusScore'),
@@ -74,6 +74,7 @@ class PopupManager {
       websitesList: document.getElementById('websitesList'),
       emptyState: document.getElementById('emptyState'),
       
+      pomoPresetBtns: document.querySelectorAll('.pomo-preset-btn'),
       pomoTimerDisplay: document.getElementById('pomoTimerDisplay'),
       pomoStatusText: document.getElementById('pomoStatusText'),
       pomoStartBtn: document.getElementById('pomoStartBtn'),
@@ -201,6 +202,16 @@ class PopupManager {
     this.elements.sortSelect.addEventListener('change', (e) => {
       this.currentSort = e.target.value;
       this.renderWebsitesList();
+    });
+
+    // 博士科研番茄钟预设点击
+    this.elements.pomoPresetBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.elements.pomoPresetBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const mins = parseInt(btn.dataset.mins, 10);
+        this.setPomodoroPreset(mins);
+      });
     });
 
     this.elements.pomoStartBtn.addEventListener('click', () => this.togglePomodoro());
@@ -390,7 +401,7 @@ class PopupManager {
       let dayTotal = 0;
 
       Object.entries(dayObj).forEach(([domain, data]) => {
-        if (domain === '_timeline') return; // 跳过时间轴特殊字段
+        if (domain === '_timeline') return;
 
         const timeSpent = data.timeSpent || 0;
         const visits = data.visits || 0;
@@ -440,12 +451,10 @@ class PopupManager {
       events = events.concat(timelineArr);
     });
 
-    // 过滤分类
     if (this.currentCategory !== 'all') {
       events = events.filter(e => e.category === this.currentCategory);
     }
 
-    // 过滤搜索关键字
     if (this.searchQuery) {
       events = events.filter(e => 
         e.domain.toLowerCase().includes(this.searchQuery) ||
@@ -453,7 +462,6 @@ class PopupManager {
       );
     }
 
-    // 按时间倒序
     events.sort((a, b) => b.timestamp - a.timestamp);
 
     const container = this.elements.timelineList;
@@ -488,7 +496,7 @@ class PopupManager {
   renderSmartInsights(aggregatedDomains) {
     const list = Object.values(aggregatedDomains);
     let totalMs = 0;
-    const catMs = { work: 0, video: 0, social: 0, shopping: 0, news: 0, other: 0 };
+    const catMs = { academic: 0, work: 0, video: 0, social: 0, shopping: 0, news: 0, other: 0 };
 
     list.forEach(d => {
       totalMs += d.timeSpent;
@@ -497,19 +505,22 @@ class PopupManager {
     });
 
     if (totalMs === 0) {
-      this.elements.smartInsightsText.textContent = '💡 提示：开始浏览网页后，此处将呈现个性化习惯分析。';
+      this.elements.smartInsightsText.textContent = '💡 提示：开始浏览论文或科研网站后，此处将呈现博士研读状态分析。';
       return;
     }
 
+    const acadMins = Math.round(catMs.academic / 60000);
     const workMins = Math.round(catMs.work / 60000);
     const entMins = Math.round((catMs.video + catMs.social + catMs.shopping) / 60000);
 
-    if (workMins > entMins) {
-      this.elements.smartInsightsText.textContent = `🌟 太棒了！您在此期间累计专注工作学习 ${workMins} 分钟，生产力状态极佳！`;
+    if (acadMins > 60) {
+      this.elements.smartInsightsText.textContent = `🎓 棒极了！您已累计研读学术科研 ${acadMins} 分钟，科研学术专注度极高，加油论文推进！`;
+    } else if ((acadMins + workMins) > entMins) {
+      this.elements.smartInsightsText.textContent = `🌟 生产力良好！科研与工作总耗时 ${acadMins + workMins} 分钟，科研工作占比持续领先。`;
     } else if (entMins > 120) {
-      this.elements.smartInsightsText.textContent = `💡 提醒：您在娱乐社交类网站已浏览 ${entMins} 分钟，建议开启番茄钟适当休息。`;
+      this.elements.smartInsightsText.textContent = `💡 提醒：您在娱乐社交网站已浏览 ${entMins} 分钟，建议开启论文研读番茄钟回归科研沉浸。`;
     } else {
-      this.elements.smartInsightsText.textContent = `📊 提示：当前上网节奏较为平衡，工作与休息比例保持良好。`;
+      this.elements.smartInsightsText.textContent = `📊 提示：当前科研与上网节奏平稳，合理分配文献阅读与思考时间。`;
     }
   }
 
@@ -554,14 +565,20 @@ class PopupManager {
   renderMetrics(dates, aggregatedDomains) {
     const domainList = Object.values(aggregatedDomains);
     let totalMs = 0;
-    domainList.forEach(d => { totalMs += d.timeSpent; });
+    let academicMs = 0;
+
+    domainList.forEach(d => {
+      totalMs += d.timeSpent;
+      if (d.category === 'academic') {
+        academicMs += d.timeSpent;
+      }
+    });
 
     this.elements.metricTotalTime.textContent = this.formatDuration(totalMs);
-
-    const activeDaysCount = dates.length || 1;
-    const dailyAvgMs = Math.round(totalMs / activeDaysCount);
-    this.elements.metricDailyAvg.textContent = this.formatDuration(dailyAvgMs);
-    this.elements.metricDaysCount.textContent = `跨度 ${activeDaysCount} 天`;
+    this.elements.metricAcademicTime.textContent = this.formatDuration(academicMs);
+    
+    const acadRatio = totalMs > 0 ? ((academicMs / totalMs) * 100).toFixed(1) : '0';
+    this.elements.metricAcademicCount.textContent = `科研占比 ${acadRatio}%`;
 
     if (domainList.length > 0) {
       domainList.sort((a, b) => b.timeSpent - a.timeSpent);
@@ -603,7 +620,7 @@ class PopupManager {
   renderFocusScore(domainList, totalMs) {
     if (totalMs === 0) {
       this.elements.metricFocusScore.textContent = '100分';
-      this.elements.metricScoreRating.textContent = '保持专注';
+      this.elements.metricScoreRating.textContent = '科研专注';
       return;
     }
 
@@ -611,15 +628,16 @@ class PopupManager {
     let neutralMs = 0;
 
     domainList.forEach(d => {
-      if (d.category === 'work') productiveMs += d.timeSpent;
+      // 🎓 academic (学术科研) 享有 100% 满分加权！
+      if (d.category === 'academic' || d.category === 'work') productiveMs += d.timeSpent;
       else if (d.category === 'news' || d.category === 'other') neutralMs += d.timeSpent;
     });
 
     const score = Math.min(100, Math.max(0, Math.round(((productiveMs + neutralMs * 0.5) / totalMs) * 100)));
     this.elements.metricFocusScore.textContent = `${score}分`;
 
-    if (score >= 80) this.elements.metricScoreRating.textContent = '高效专注 🌟';
-    else if (score >= 60) this.elements.metricScoreRating.textContent = '工作平衡 👍';
+    if (score >= 80) this.elements.metricScoreRating.textContent = '科研研读 🌟';
+    else if (score >= 60) this.elements.metricScoreRating.textContent = '科研平衡 👍';
     else if (score >= 40) this.elements.metricScoreRating.textContent = '稍有分心 ☕';
     else this.elements.metricScoreRating.textContent = '建议休息 🧘';
   }
@@ -727,11 +745,12 @@ class PopupManager {
 
   drawCategoryChart(svg, aggregatedDomains) {
     const cats = {
+      academic: { label: '🎓 学术科研', ms: 0, color: '#8b5cf6' },
       work: { label: '💻 工作学习', ms: 0, color: '#10b981' },
       social: { label: '💬 社交通讯', ms: 0, color: '#38bdf8' },
       video: { label: '📹 视频娱乐', ms: 0, color: '#ff6b4a' },
       shopping: { label: '🛍️ 购物消费', ms: 0, color: '#f59e0b' },
-      news: { label: '📰 新闻资讯', ms: 0, color: '#8b5cf6' },
+      news: { label: '📰 新闻资讯', ms: 0, color: '#0ea5e9' },
       other: { label: '❓ 其他网站', ms: 0, color: '#94a3b8' }
     };
 
@@ -746,7 +765,7 @@ class PopupManager {
 
     if (totalMs === 0) return;
 
-    let currentY = 10;
+    let currentY = 5;
     Object.values(cats).forEach(cat => {
       if (cat.ms === 0) return;
       const pct = (cat.ms / totalMs) * 100;
@@ -768,17 +787,18 @@ class PopupManager {
       rect.setAttribute('fill', cat.color);
       svg.appendChild(rect);
 
-      currentY += 18;
+      currentY += 16;
     });
   }
 
   drawDonutChart(svg, aggregatedDomains) {
     const cats = [
+      { key: 'academic', label: '科研', ms: 0, color: '#8b5cf6' },
       { key: 'work', label: '工作', ms: 0, color: '#10b981' },
       { key: 'social', label: '社交', ms: 0, color: '#38bdf8' },
       { key: 'video', label: '视频', ms: 0, color: '#ff6b4a' },
       { key: 'shopping', label: '购物', ms: 0, color: '#f59e0b' },
-      { key: 'news', label: '资讯', ms: 0, color: '#8b5cf6' },
+      { key: 'news', label: '资讯', ms: 0, color: '#0ea5e9' },
       { key: 'other', label: '其他', ms: 0, color: '#94a3b8' }
     ];
 
@@ -825,7 +845,7 @@ class PopupManager {
       cumulativeAngle += ratio;
     });
 
-    let legY = 16;
+    let legY = 12;
     cats.filter(c => c.ms > 0).forEach(cat => {
       const pct = ((cat.ms / totalMs) * 100).toFixed(1);
       
@@ -846,7 +866,7 @@ class PopupManager {
       text.textContent = `${cat.label} ${pct}%`;
       svg.appendChild(text);
 
-      legY += 16;
+      legY += 15;
     });
   }
 
@@ -888,7 +908,7 @@ class PopupManager {
     emptyState.style.display = 'none';
 
     const catLabels = {
-      work: '💻工作', social: '💬社交', video: '📹视频',
+      academic: '🎓科研', work: '💻工作', social: '💬社交', video: '📹视频',
       shopping: '🛍️购物', news: '📰资讯', other: '网页'
     };
 
@@ -897,6 +917,8 @@ class PopupManager {
       const durationStr = this.formatDuration(item.timeSpent);
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${item.domain}&sz=32`;
       const initialLetter = item.domain.charAt(0).toUpperCase();
+
+      const catClass = item.category === 'academic' ? 'cat-academic' : '';
 
       return `
         <div class="website-item" data-domain-detail="${item.domain}">
@@ -916,7 +938,7 @@ class PopupManager {
             </div>
 
             <div class="site-meta-row">
-              <span class="cat-badge">${catLabels[item.category] || '网页'}</span>
+              <span class="cat-badge ${catClass}">${catLabels[item.category] || '网页'}</span>
               <span>占比 ${pct}% • 访问 ${item.visits || 1}次</span>
             </div>
           </div>
@@ -1031,6 +1053,13 @@ class PopupManager {
     }
   }
 
+  setPomodoroPreset(mins) {
+    this.resetPomodoro();
+    this.pomodoro.secondsLeft = mins * 60;
+    this.updatePomoDisplay();
+    this.showToast(`番茄钟设定为 ${mins} 分钟`, 'info');
+  }
+
   togglePomodoro() {
     if (this.pomodoro.isRunning) {
       clearInterval(this.pomodoro.timerId);
@@ -1040,7 +1069,7 @@ class PopupManager {
     } else {
       this.pomodoro.isRunning = true;
       this.elements.pomoStartBtn.textContent = '暂停';
-      this.elements.pomoStatusText.textContent = '🔥 沉浸专注中...';
+      this.elements.pomoStatusText.textContent = '🔥 科研论文沉浸专注中...';
 
       this.pomodoro.timerId = setInterval(() => {
         this.pomodoro.secondsLeft--;
@@ -1049,7 +1078,7 @@ class PopupManager {
         if (this.pomodoro.secondsLeft <= 0) {
           clearInterval(this.pomodoro.timerId);
           this.pomodoro.isRunning = false;
-          this.showToast('🎉 25分钟番茄钟完成！休息一下吧。', 'success');
+          this.showToast('🎉 番茄钟专注完成！研读辛苦了，休息放松一下吧。', 'success');
           this.resetPomodoro();
         }
       }, 1000);
@@ -1156,7 +1185,7 @@ class PopupManager {
     const entries = Object.entries(cats);
 
     const catLabels = {
-      work: '💻工作', social: '💬社交', video: '📹视频',
+      academic: '🎓科研', work: '💻工作', social: '💬社交', video: '📹视频',
       shopping: '🛍️购物', news: '📰资讯'
     };
 
@@ -1260,7 +1289,7 @@ class PopupManager {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `website-timer-backup-${this.getTodayKey()}.json`);
+      downloadAnchor.setAttribute("download", `website-timer-phd-backup-${this.getTodayKey()}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
@@ -1281,7 +1310,7 @@ class PopupManager {
       }
 
       const catLabels = {
-        work: '工作学习', social: '社交通讯', video: '视频娱乐',
+        academic: '学术科研', work: '工作学习', social: '社交通讯', video: '视频娱乐',
         shopping: '购物消费', news: '新闻资讯', other: '其他网页'
       };
 
@@ -1301,7 +1330,7 @@ class PopupManager {
       const encodedUri = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `website-timer-report-${this.getTodayKey()}.csv`);
+      link.setAttribute("download", `website-timer-phd-report-${this.getTodayKey()}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();

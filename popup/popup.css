@@ -1,4 +1,4 @@
-/* 网站使用时长统计器 - 现代化琉璃 UI 样式库 (时间轴增强旗舰版) */
+/* 网站使用时长统计器 - 现代化琉璃 UI 样式库 (博士科研专属版) */
 
 /* --- 1. CSS 主题变量定义 --- */
 :root {
@@ -108,7 +108,7 @@ body {
 
 .brand-name {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: -0.3px;
 }
 
@@ -386,7 +386,7 @@ body {
   background: rgba(0, 0, 0, 0.05);
 }
 
-/* 视图切换 (排行榜 vs 时间轴) */
+/* 视图切换 */
 .view-switch-row {
   display: flex;
   margin-bottom: 2px;
@@ -619,6 +619,13 @@ body {
   font-size: 9px;
 }
 
+/* 学术分类专属 Badge 样式 */
+.cat-badge.cat-academic {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+  font-weight: 700;
+}
+
 /* 📜 24小时时间轴样式 */
 .timeline-list {
   position: relative;
@@ -741,47 +748,34 @@ body {
   margin-bottom: 12px;
 }
 
-/* 连续打卡与勋章成就 */
-.streak-box {
+/* 番茄钟预设 Pills */
+.pomo-presets-row {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+  margin-bottom: 10px;
+  justify-content: center;
 }
 
-.streak-count {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--primary);
-}
-
-.achievement-grid {
-  display: flex;
-  gap: 8px;
-}
-
-.badge-item {
-  flex: 1;
-  text-align: center;
-  padding: 8px 4px;
-  border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.03);
+.pomo-preset-btn {
+  padding: 4px 10px;
+  border-radius: 12px;
   border: 1px solid var(--card-border);
+  background: rgba(0, 0, 0, 0.03);
   font-size: 11px;
+  font-weight: 600;
   color: var(--text-muted);
-  opacity: 0.6;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.badge-item.active {
-  opacity: 1;
+.pomo-preset-btn.active {
   background: var(--primary-light);
   color: var(--primary);
   border-color: var(--primary);
-  font-weight: 700;
 }
 
-/* 番茄钟样式 */
 .pomodoro-card { text-align: center; }
-.pomodoro-display { margin: 14px 0; }
+.pomodoro-display { margin: 10px 0 14px 0; }
 
 .timer-digits {
   font-size: 38px;

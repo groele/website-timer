@@ -1,4 +1,4 @@
-// 网站使用时长统计后台脚本 (时间轴日志增强版)
+// 网站使用时长统计后台脚本 (博士科研专属增强版)
 
 class WebsiteTimer {
   constructor() {
@@ -53,6 +53,7 @@ class WebsiteTimer {
     }
   }
 
+  // 自动推断网站分类 (增加博士科研 Academic 分类)
   getDomainCategory(domain) {
     if (!domain) return 'other';
     
@@ -61,6 +62,15 @@ class WebsiteTimer {
     }
 
     const categories = {
+      // 🎓 学术科研专属分类 (优先级最高)
+      academic: [
+        'arxiv.org', 'biorxiv.org', 'medrxiv.org', 'ssrn.com', 'researchgate.net', 'zenodo.org', 'chemrxiv.org',
+        'nature.com', 'science.org', 'sciencedirect.com', 'ieee.org', 'acm.org', 'springer.com', 'wiley.com',
+        'acs.org', 'rsc.org', 'cell.com', 'pnas.org', 'plos.org', 'frontiersin.org', 'mdpi.com', 'iop.org', 'aps.org',
+        'scholar.google.com', 'semanticscholar.org', 'pubmed.ncbi.nlm.nih.gov', 'cnki.net', 'wanfangdata.com.cn',
+        'connectedpapers.com', 'researchrabbit.ai', 'webofscience.com', 'scopus.com', 'cqvip.com',
+        'overleaf.com', 'zotero.org', 'mendeley.com', 'elicit.org', 'consensus.app', 'scite.ai', 'chatpdf.com', 'arxiv-vanity.com'
+      ],
       work: [
         'github.com', 'stackoverflow.com', 'gitee.com', 'v2ex.com', 'juejin.cn',
         'csdn.net', 'cnblogs.com', 'gitlab.com', 'notion.so', 'feishu.cn',
@@ -214,7 +224,6 @@ class WebsiteTimer {
     }
   }
 
-  // 保存时间记录并写入时间轴日志
   async saveTimeSpent() {
     if (!this.activeTabInfo || !this.lastActiveTime || this.settings.isPaused) {
       return;
@@ -270,7 +279,6 @@ class WebsiteTimer {
       todayData[domain].lastTitle = this.activeTabInfo.title || domain;
       todayData[domain].lastVisit = Date.now();
 
-      // 写入时间轴事件列表 (_timeline)
       if (!todayData._timeline) {
         todayData._timeline = [];
       }
@@ -278,7 +286,6 @@ class WebsiteTimer {
       const category = this.getDomainCategory(domain);
       const lastEvent = todayData._timeline[todayData._timeline.length - 1];
 
-      // 如果同网站且同标题且时间间隔小于 2 分钟，则直接合并延长上条记录
       if (lastEvent && lastEvent.domain === domain && (Date.now() - lastEvent.timestamp < 120000)) {
         lastEvent.durationMs += timeSpent;
         lastEvent.timestamp = Date.now();
@@ -292,7 +299,6 @@ class WebsiteTimer {
           category: category
         });
 
-        // 时间轴最多保留最新 100 条记录
         if (todayData._timeline.length > 100) {
           todayData._timeline.shift();
         }

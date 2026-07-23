@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>网站使用时长统计器</title>
+  <title>网站使用时长统计器 - 博士科研版</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body data-theme="sunset">
@@ -12,7 +12,7 @@
     <header class="app-header">
       <div class="brand">
         <span class="brand-icon">⏱️</span>
-        <span class="brand-name">网页计时器</span>
+        <span class="brand-name">网页计时器 (博士科研版)</span>
       </div>
       
       <div class="nav-tabs">
@@ -48,7 +48,7 @@
         <!-- 智能习惯诊断洞察卡片 -->
         <div class="insights-card" id="smartInsightsCard">
           <span class="insights-icon">💡</span>
-          <div class="insights-text" id="smartInsightsText">正在分析您的上网习惯与专注表现...</div>
+          <div class="insights-text" id="smartInsightsText">正在分析您的科研论文研读与专注表现...</div>
         </div>
 
         <!-- 关键数据卡片Grid -->
@@ -63,11 +63,11 @@
           </div>
 
           <div class="metric-card">
-            <div class="card-icon">📅</div>
+            <div class="card-icon">🎓</div>
             <div class="card-info">
-              <div class="card-label">日均时长</div>
-              <div class="card-value" id="metricDailyAvg">0分钟</div>
-              <div class="card-subtext" id="metricDaysCount">共 1 天</div>
+              <div class="card-label">学术科研研读</div>
+              <div class="card-value" id="metricAcademicTime">0分钟</div>
+              <div class="card-subtext" id="metricAcademicCount">文献占比 0%</div>
             </div>
           </div>
 
@@ -138,12 +138,13 @@
 
           <div class="search-box">
             <span class="search-icon">🔍</span>
-            <input type="text" id="searchSiteInput" placeholder="搜索域名或页面标题... (点击查看下钻)">
+            <input type="text" id="searchSiteInput" placeholder="搜索 arXiv/期刊/域名/标题...">
           </div>
           
           <div class="filter-row">
             <div class="category-pills">
               <button class="cat-pill active" data-cat="all">全部</button>
+              <button class="cat-pill" data-cat="academic">🎓科研</button>
               <button class="cat-pill" data-cat="work">💻工作</button>
               <button class="cat-pill" data-cat="social">💬社交</button>
               <button class="cat-pill" data-cat="video">📹视频</button>
@@ -182,13 +183,19 @@
 
       <!-- TAB 2: 🎯 专注与限制 -->
       <section id="limitsTab" class="tab-content">
-        <!-- 番茄钟专注模式 -->
+        <!-- 博士科研论文研读番茄钟 -->
         <div class="section-card pomodoro-card">
           <div class="card-header-title">
             <span class="header-icon">🍅</span>
-            <h3>番茄钟专注模式</h3>
+            <h3>博士论文研读与写作专注钟</h3>
           </div>
-          <p class="section-desc">开启 25 分钟沉浸专注，减少无意义的娱乐网站浏览。</p>
+          <p class="section-desc">沉浸论文阅读与 Overleaf 写作，避免社交娱乐打扰。</p>
+
+          <div class="pomo-presets-row">
+            <button class="pomo-preset-btn active" data-mins="25">📖 25m速读</button>
+            <button class="pomo-preset-btn" data-mins="45">🔬 45m深度研读</button>
+            <button class="pomo-preset-btn" data-mins="60">✍️ 60m论文写作</button>
+          </div>
 
           <div class="pomodoro-display">
             <div class="timer-digits" id="pomoTimerDisplay">25:00</div>
@@ -207,13 +214,13 @@
             <span class="header-icon">🏅</span>
             <h3>连续专注打卡与成就</h3>
           </div>
-          <p class="section-desc">保持良好上网习惯，解锁自律勋章！</p>
+          <p class="section-desc">保持良好科研习惯，解锁自律勋章！</p>
 
           <div class="streak-box">
             <div class="streak-count">🔥 连续达标 <span id="streakDaysVal">1</span> 天</div>
             <div class="achievement-grid" id="achievementBadges">
               <div class="badge-item active" title="专注先锋：连续 1 天保持高效">🌱 专注先锋</div>
-              <div class="badge-item" title="时间管理大师：连续 7 天未超限">👑 时间大师</div>
+              <div class="badge-item" title="科研学霸：连续 7 天论文研读">🎓 科研学霸</div>
               <div class="badge-item" title="自律达人：专注得分连续保持 80+">⚡ 自律达人</div>
             </div>
           </div>
@@ -302,11 +309,12 @@
             <span class="header-icon">🏷️</span>
             <h3>自定义网站分类归属</h3>
           </div>
-          <p class="section-desc">手动指定域名的类别（如将 bilibili.com 改为工作）。</p>
+          <p class="section-desc">手动指定域名的类别（如将 bilibili.com 改为科研/工作）。</p>
 
           <div class="form-inline-group">
-            <input type="text" id="customCatName" placeholder="域名如: bilibili.com">
+            <input type="text" id="customCatName" placeholder="域名如: arxiv.org">
             <select id="customCatSelect" style="width: 110px;">
+              <option value="academic">🎓学术科研</option>
               <option value="work">💻工作学习</option>
               <option value="social">💬社交通讯</option>
               <option value="video">📹视频娱乐</option>
@@ -394,7 +402,7 @@
             <button id="exportDataBtn" class="btn btn-secondary">📥 导出 JSON 数据</button>
             <button id="exportCsvBtn" class="btn btn-secondary">📊 导出 CSV 报表</button>
             <button id="importDataBtn" class="btn btn-secondary">📤 导入 JSON 数据</button>
-            <button id="purgeShortBtn" class="btn btn-secondary">🧹 一键清理微小记录(&lt;10s)</button>
+            <button id="purgeShortBtn" class="btn btn-secondary">🧹 清理微小记录(&lt;10s)</button>
             <input type="file" id="importFileInput" accept=".json" style="display: none;">
             <button id="resetTodayBtn" class="btn btn-danger-soft">🔄 清空今日数据</button>
             <button id="clearAllBtn" class="btn btn-danger" style="grid-column: span 2;">🗑️ 重置所有历史数据</button>
