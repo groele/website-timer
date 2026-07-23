@@ -1,27 +1,27 @@
-// 网站使用时长统计后台脚本 (专业增强版)
+// 网站使用时长统计后台脚本 (旗舰增强版)
 
 class WebsiteTimer {
   constructor() {
     this.activeTabInfo = null;
     this.lastActiveTime = null;
-    this.continuousActiveTime = 0; // 连续浏览时长 (毫秒)
+    this.continuousActiveTime = 0;
     this.isUserActive = true;
     this.currentDay = this.getTodayKey();
     
     // 默认配置
     this.defaultSettings = {
       blackList: ['newtab', 'extensions', 'devtools', 'localhost', '127.0.0.1'],
-      minTimeThreshold: 5000,      // 5秒
-      retentionDays: 90,          // 90天
+      minTimeThreshold: 5000,
+      retentionDays: 90,
       isPaused: false,
-      breakReminderMins: 45,      // 45分钟久坐/护眼提醒 (0为关闭)
-      subdomainGrouping: false,   // 是否合并子域名到主域名
+      breakReminderMins: 45,
+      subdomainGrouping: false,
       dailyLimits: {
-        global: 0,                // 0 表示无全局限制 (毫秒)
-        domains: {}               // { 'bilibili.com': 1800000 } (毫秒)
+        global: 0,
+        domains: {}
       },
-      customCategories: {},        // { 'bilibili.com': 'work' }
-      notifiedLimits: {}           // 记录已通知的项目 { '2026-07-23_global': true }
+      customCategories: {},
+      notifiedLimits: {}
     };
 
     this.settings = { ...this.defaultSettings };
@@ -30,12 +30,10 @@ class WebsiteTimer {
     this.updateBadge();
   }
 
-  // 获取今天的日期键 YYYY-MM-DD
   getTodayKey() {
     return new Date().toISOString().split('T')[0];
   }
 
-  // 从URL提取域名 (可根据设置决定是否合并子域名)
   extractDomain(url) {
     try {
       const urlObj = new URL(url);
@@ -56,7 +54,6 @@ class WebsiteTimer {
     }
   }
 
-  // 自动推断网站分类 (优先使用用户自定义设置)
   getDomainCategory(domain) {
     if (!domain) return 'other';
     
@@ -101,7 +98,6 @@ class WebsiteTimer {
     return 'other';
   }
 
-  // 初始化设置
   async initSettings() {
     try {
       const result = await chrome.storage.local.get(['timer_settings']);
@@ -115,7 +111,6 @@ class WebsiteTimer {
     }
   }
 
-  // 检查域名是否在黑名单/忽略列表中
   isBlacklisted(domain) {
     if (!domain) return true;
     if (this.settings.isPaused) return true;
@@ -125,7 +120,6 @@ class WebsiteTimer {
     });
   }
 
-  // 初始化事件监听器
   initializeEventListeners() {
     chrome.tabs.onActivated.addListener((activeInfo) => {
       this.handleTabChange(activeInfo.tabId);
@@ -159,7 +153,6 @@ class WebsiteTimer {
     });
   }
 
-  // 处理标签页切换
   async handleTabChange(tabId) {
     if (this.activeTabInfo && this.isUserActive) {
       await this.saveTimeSpent();
@@ -175,7 +168,8 @@ class WebsiteTimer {
           this.activeTabInfo = {
             domain: domain,
             url: tab.url,
-            title: tab.title
+            title: tab.title,
+            tabId: tab.id
           };
           this.lastActiveTime = Date.now();
         } else {
@@ -192,14 +186,12 @@ class WebsiteTimer {
     }
   }
 
-  // 处理窗口失去焦点
   handleWindowBlur() {
     this.isUserActive = false;
-    this.continuousActiveTime = 0; // 重置连续活动时间
+    this.continuousActiveTime = 0;
     this.saveTimeSpent();
   }
 
-  // 处理窗口获得焦点
   async handleWindowFocus(windowId) {
     this.isUserActive = true;
     try {
@@ -212,7 +204,6 @@ class WebsiteTimer {
     }
   }
 
-  // 处理用户空闲状态变化
   handleIdleStateChange(state) {
     if (state === 'idle' || state === 'locked') {
       this.isUserActive = false;
@@ -224,7 +215,6 @@ class WebsiteTimer {
     }
   }
 
-  // 保存时间记录
   async saveTimeSpent() {
     if (!this.activeTabInfo || !this.lastActiveTime || this.settings.isPaused) {
       return;
@@ -242,7 +232,6 @@ class WebsiteTimer {
       return;
     }
 
-    // 累加连续浏览时长
     this.continuousActiveTime += timeSpent;
     this.checkBreakReminder();
 
@@ -290,7 +279,6 @@ class WebsiteTimer {
     this.lastActiveTime = Date.now();
   }
 
-  // 检查久坐/连续上网护眼提醒
   checkBreakReminder() {
     const reminderMins = this.settings.breakReminderMins || 0;
     if (reminderMins <= 0) return;
@@ -310,7 +298,6 @@ class WebsiteTimer {
     }
   }
 
-  // 记录新的访问
   async recordVisit(domain, title) {
     if (this.isBlacklisted(domain) || this.settings.isPaused) return;
 
@@ -343,7 +330,6 @@ class WebsiteTimer {
     }
   }
 
-  // 检查并发送时长超限提醒
   checkLimits(domain, todayData) {
     const limits = this.settings.dailyLimits || {};
     const todayKey = this.getTodayKey();
@@ -367,16 +353,40 @@ class WebsiteTimer {
     if (limits.domains && limits.domains[domain]) {
       const domainLimitMs = limits.domains[domain];
       const domainSpentMs = todayData[domain]?.timeSpent || 0;
-      const domainNotifiedKey = `${todayKey}_${domain}`;
+      const pct = Math.floor((domainSpentMs / domainLimitMs) * 100);
 
+      // 1. 80% 温柔预警通知与网页内浮条
+      const warn80Key = `${todayKey}_${domain}_80`;
+      if (pct >= 80 && pct < 100 && !notified[warn80Key]) {
+        this.sendInPageBanner(domain, Math.round(domainSpentMs / 60000), Math.round(domainLimitMs / 60000), pct);
+        notified[warn80Key] = true;
+        chrome.storage.local.set({ timer_settings: { ...this.settings, notifiedLimits: notified } });
+      }
+
+      // 2. 100% 满额通知与网页内浮条
+      const domainNotifiedKey = `${todayKey}_${domain}`;
       if (domainSpentMs >= domainLimitMs && !notified[domainNotifiedKey]) {
         this.sendNotification(
           `🛑 网站限额提醒: ${domain}`,
           `您在 ${domain} 的浏览时长已达到 ${(domainLimitMs / 60000).toFixed(0)} 分钟限制！`
         );
+        this.sendInPageBanner(domain, Math.round(domainSpentMs / 60000), Math.round(domainLimitMs / 60000), 100);
         notified[domainNotifiedKey] = true;
         chrome.storage.local.set({ timer_settings: { ...this.settings, notifiedLimits: notified } });
       }
+    }
+  }
+
+  // 向当前活动网页 Tab 发送网页内 Banner 提醒
+  sendInPageBanner(domain, currentMins, limitMins, percent) {
+    if (this.activeTabInfo && this.activeTabInfo.tabId) {
+      chrome.tabs.sendMessage(this.activeTabInfo.tabId, {
+        type: 'SHOW_LIMIT_BANNER',
+        domain: domain,
+        currentMins: currentMins,
+        limitMins: limitMins,
+        percent: percent
+      }).catch(() => {});
     }
   }
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "网站使用时长统计器",
-  "version": "1.1",
+  "version": "1.2",
   "description": "统计并显示每日各网站的使用时长",
   "permissions": [
     "tabs",

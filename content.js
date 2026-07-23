@@ -1,4 +1,4 @@
-// 页面活动状态检测脚本
+// 页面活动状态检测与网页内提醒 Banner 脚本 (升级版)
 
 class PageActivityDetector {
   constructor() {
@@ -7,24 +7,21 @@ class PageActivityDetector {
     this.activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
     this.setupEventListeners();
     this.startActivityReporting();
+    this.listenForBannerMessages();
   }
 
-  // 设置事件监听器
   setupEventListeners() {
-    // 监听页面可见性变化
     document.addEventListener('visibilitychange', () => {
       this.isPageVisible = !document.hidden;
       this.reportActivity();
     }, { passive: true });
 
-    // 监听用户活动事件
     this.activityEvents.forEach(eventType => {
       document.addEventListener(eventType, () => {
         this.handleUserActivity();
       }, { passive: true, capture: true });
     });
 
-    // 监听页面焦点变化
     window.addEventListener('focus', () => {
       this.handleUserActivity();
     });
@@ -34,20 +31,17 @@ class PageActivityDetector {
     });
   }
 
-  // 处理用户活动
   handleUserActivity() {
     if (this.isPageVisible) {
       this.lastActivityTime = Date.now();
     }
   }
 
-  // 向background script报告活动状态
   reportActivity() {
     const now = Date.now();
     const timeSinceLastActivity = now - this.lastActivityTime;
-    const isActivelyUsing = this.isPageVisible && timeSinceLastActivity < 10000; // 10秒内有活动
+    const isActivelyUsing = this.isPageVisible && timeSinceLastActivity < 10000;
 
-    // 发送消息给background script（虽然当前版本的background script不需要这个信息，但为将来扩展预留）
     try {
       chrome.runtime.sendMessage({
         type: 'PAGE_ACTIVITY_STATUS',
@@ -58,22 +52,15 @@ class PageActivityDetector {
           url: window.location.href,
           title: document.title
         }
-      }).catch(() => {
-        // 忽略发送失败的错误（扩展可能未加载完成）
-      });
-    } catch (error) {
-      // 静默处理错误
-    }
+      }).catch(() => {});
+    } catch (error) {}
   }
 
-  // 开始定期报告活动状态
   startActivityReporting() {
-    // 每30秒报告一次状态
     setInterval(() => {
       this.reportActivity();
     }, 30000);
 
-    // 页面加载完成时立即报告
     if (document.readyState === 'complete') {
       this.reportActivity();
     } else {
@@ -82,11 +69,83 @@ class PageActivityDetector {
       });
     }
   }
+
+  // 监听来自 Background Script 的限额提醒 Banner 消息
+  listenForBannerMessages() {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message && message.type === 'SHOW_LIMIT_BANNER') {
+        this.showInPageBanner(message);
+      }
+    });
+  }
+
+  // 在网页顶部优雅注入温柔提醒 Banner
+  showInPageBanner({ domain, currentMins, limitMins, percent }) {
+    if (document.getElementById('website-timer-warning-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'website-timer-warning-banner';
+    
+    const isFull = percent >= 100;
+    const bgGradient = isFull ? 
+      'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 
+      'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+
+    banner.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: ${bgGradient};
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 2147483647;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      animation: wtSlideDown 0.4s ease-out;
+    `;
+
+    const icon = isFull ? '🛑' : '⚠️';
+    const text = isFull ?
+      `【时长限制】您在 ${domain} 的每日额度 (${limitMins}分钟) 已用尽！请注意休息。` :
+      `【时长提醒】您在 ${domain} 已使用 ${currentMins} / ${limitMins} 分钟 (${percent}%)。`;
+
+    banner.innerHTML = `
+      <style>
+        @keyframes wtSlideDown {
+          from { transform: translateY(-100%); }
+          to { transform: translateY(0); }
+        }
+      </style>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span>${icon}</span>
+        <span>${text}</span>
+      </div>
+      <button id="wtCloseBannerBtn" style="background:transparent; border:none; color:white; font-size:16px; cursor:pointer; padding:0 4px;">✕</button>
+    `;
+
+    document.body.appendChild(banner);
+
+    document.getElementById('wtCloseBannerBtn').onclick = () => {
+      banner.remove();
+    };
+
+    // 8 秒后自动收起
+    setTimeout(() => {
+      if (document.body.contains(banner)) {
+        banner.remove();
+      }
+    }, 8000);
+  }
 }
 
-// 检查是否是有效的网页（避免在扩展页面等特殊页面运行）
 if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
-  // 延迟初始化，避免影响页面加载性能
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {

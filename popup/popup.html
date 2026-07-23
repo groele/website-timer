@@ -45,6 +45,12 @@
           <button class="period-btn" data-period="all">全部</button>
         </div>
 
+        <!-- 智能习惯诊断洞察卡片 -->
+        <div class="insights-card" id="smartInsightsCard">
+          <span class="insights-icon">💡</span>
+          <div class="insights-text" id="smartInsightsText">正在分析您的上网习惯与专注表现...</div>
+        </div>
+
         <!-- 关键数据卡片Grid -->
         <div class="metrics-grid">
           <div class="metric-card highlight">
@@ -102,11 +108,30 @@
           </div>
         </div>
 
+        <!-- 🔥 52周 GitHub 风格年度浏览热力图 -->
+        <div class="heatmap-box" id="heatmapBox">
+          <div class="heatmap-header">
+            <span class="heatmap-title">🔥 浏览活跃热力矩阵</span>
+            <span class="heatmap-legend">
+              <span>少</span>
+              <span class="square sq-0"></span>
+              <span class="square sq-1"></span>
+              <span class="square sq-2"></span>
+              <span class="square sq-3"></span>
+              <span class="square sq-4"></span>
+              <span>多</span>
+            </span>
+          </div>
+          <div class="heatmap-grid" id="heatmapGrid">
+            <!-- 52周打卡方块矩阵 -->
+          </div>
+        </div>
+
         <!-- 搜索与分类过滤栏 -->
         <div class="filter-toolbar">
           <div class="search-box">
             <span class="search-icon">🔍</span>
-            <input type="text" id="searchSiteInput" placeholder="搜索域名或页面标题... (点击结果下钻看详情)">
+            <input type="text" id="searchSiteInput" placeholder="搜索域名或页面标题... (悬浮操作/点击看详情)">
           </div>
           
           <div class="filter-row">
@@ -159,6 +184,24 @@
           <div class="pomo-controls">
             <button id="pomoStartBtn" class="btn btn-primary btn-glow">开始专注</button>
             <button id="pomoResetBtn" class="btn btn-secondary">重置</button>
+          </div>
+        </div>
+
+        <!-- 🏅 连续自律打卡与成就勋章 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">🏅</span>
+            <h3>连续专注打卡与成就</h3>
+          </div>
+          <p class="section-desc">保持良好上网习惯，解锁自律勋章！</p>
+
+          <div class="streak-box">
+            <div class="streak-count">🔥 连续达标 <span id="streakDaysVal">1</span> 天</div>
+            <div class="achievement-grid" id="achievementBadges">
+              <div class="badge-item active" title="专注先锋：连续 1 天保持高效">🌱 专注先锋</div>
+              <div class="badge-item" title="时间管理大师：连续 7 天未超限">👑 时间大师</div>
+              <div class="badge-item" title="自律达人：专注得分连续保持 80+">⚡ 自律达人</div>
+            </div>
           </div>
         </div>
 
@@ -330,13 +373,14 @@
         <div class="section-card">
           <div class="card-header-title">
             <span class="header-icon">💾</span>
-            <h3>数据备份与报表</h3>
+            <h3>数据备份与整理</h3>
           </div>
 
           <div class="action-buttons-grid">
             <button id="exportDataBtn" class="btn btn-secondary">📥 导出 JSON 数据</button>
             <button id="exportCsvBtn" class="btn btn-secondary">📊 导出 CSV 报表</button>
             <button id="importDataBtn" class="btn btn-secondary">📤 导入 JSON 数据</button>
+            <button id="purgeShortBtn" class="btn btn-secondary">🧹 一键清理微小记录(&lt;10s)</button>
             <input type="file" id="importFileInput" accept=".json" style="display: none;">
             <button id="resetTodayBtn" class="btn btn-danger-soft">🔄 清空今日数据</button>
             <button id="clearAllBtn" class="btn btn-danger" style="grid-column: span 2;">🗑️ 重置所有历史数据</button>

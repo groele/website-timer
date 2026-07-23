@@ -1,4 +1,4 @@
-// 网站使用时长统计器 - 弹窗逻辑脚本 (全能专业版)
+// 网站使用时长统计器 - 弹窗逻辑脚本 (旗舰全能版)
 
 class PopupManager {
   constructor() {
@@ -45,7 +45,11 @@ class PopupManager {
       navBtns: document.querySelectorAll('.nav-btn'),
       tabContents: document.querySelectorAll('.tab-content'),
       
-      // 时间与统计指标
+      // 智能诊断洞察与热力图
+      smartInsightsText: document.getElementById('smartInsightsText'),
+      heatmapGrid: document.getElementById('heatmapGrid'),
+
+      // 统计指标
       periodBtns: document.querySelectorAll('.period-btn'),
       metricTotalTime: document.getElementById('metricTotalTime'),
       metricWeekTrend: document.getElementById('metricWeekTrend'),
@@ -68,12 +72,13 @@ class PopupManager {
       websitesList: document.getElementById('websitesList'),
       emptyState: document.getElementById('emptyState'),
       
-      // 番茄钟
+      // 番茄钟与打卡
       pomoTimerDisplay: document.getElementById('pomoTimerDisplay'),
       pomoStatusText: document.getElementById('pomoStatusText'),
       pomoStartBtn: document.getElementById('pomoStartBtn'),
       pomoResetBtn: document.getElementById('pomoResetBtn'),
-      
+      streakDaysVal: document.getElementById('streakDaysVal'),
+
       // 限制与额度
       globalLimitInput: document.getElementById('globalLimitInput'),
       saveGlobalLimitBtn: document.getElementById('saveGlobalLimitBtn'),
@@ -100,6 +105,7 @@ class PopupManager {
       exportDataBtn: document.getElementById('exportDataBtn'),
       exportCsvBtn: document.getElementById('exportCsvBtn'),
       importDataBtn: document.getElementById('importDataBtn'),
+      purgeShortBtn: document.getElementById('purgeShortBtn'),
       importFileInput: document.getElementById('importFileInput'),
       resetTodayBtn: document.getElementById('resetTodayBtn'),
       clearAllBtn: document.getElementById('clearAllBtn'),
@@ -129,7 +135,6 @@ class PopupManager {
   }
 
   setupEventListeners() {
-    // 1. Tab 页切换
     this.elements.navBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         const targetTab = btn.dataset.tab;
@@ -140,7 +145,6 @@ class PopupManager {
       });
     });
 
-    // 2. 时间段 Pills
     this.elements.periodBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         this.elements.periodBtns.forEach(b => b.classList.remove('active'));
@@ -150,7 +154,6 @@ class PopupManager {
       });
     });
 
-    // 3. 图表类型切换
     this.elements.chartBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         this.elements.chartBtns.forEach(b => b.classList.remove('active'));
@@ -160,7 +163,6 @@ class PopupManager {
       });
     });
 
-    // 4. 搜索与筛选
     this.elements.searchSiteInput.addEventListener('input', (e) => {
       this.searchQuery = e.target.value.trim().toLowerCase();
       this.renderWebsitesList();
@@ -180,15 +182,12 @@ class PopupManager {
       this.renderWebsitesList();
     });
 
-    // 5. 番茄钟事件
     this.elements.pomoStartBtn.addEventListener('click', () => this.togglePomodoro());
     this.elements.pomoResetBtn.addEventListener('click', () => this.resetPomodoro());
 
-    // 6. 限制与额度事件
     this.elements.saveGlobalLimitBtn.addEventListener('click', () => this.saveGlobalLimit());
     this.elements.addDomainLimitBtn.addEventListener('click', () => this.addDomainLimit());
 
-    // 7. 设置事件
     this.elements.pauseTimerToggle.addEventListener('change', (e) => {
       this.updateSetting('isPaused', e.target.checked);
       this.showToast(e.target.checked ? '已暂停网页计时' : '已恢复网页计时', 'success');
@@ -222,10 +221,10 @@ class PopupManager {
       this.showToast(`数据保留规则已更新为: ${val === 0 ? '永久' : val + '天'}`, 'success');
     });
 
-    // 8. 数据备份与恢复
     this.elements.exportDataBtn.addEventListener('click', () => this.exportJSONData());
     this.elements.exportCsvBtn.addEventListener('click', () => this.exportCSVData());
     this.elements.importDataBtn.addEventListener('click', () => this.elements.importFileInput.click());
+    this.elements.purgeShortBtn.addEventListener('click', () => this.purgeShortVisits());
     this.elements.importFileInput.addEventListener('change', (e) => this.importJSONData(e));
     
     this.elements.resetTodayBtn.addEventListener('click', () => {
@@ -236,7 +235,6 @@ class PopupManager {
       this.showConfirmModal('清空所有历史', '警告：此操作将清空包含历史记录与限制设置在内的所有数据！确定继续？', () => this.clearAllHistoryData());
     });
 
-    // 9. 单站下钻弹框关闭
     this.elements.closeDetailModal.addEventListener('click', () => {
       this.elements.domainDetailModal.style.display = 'none';
     });
@@ -246,7 +244,6 @@ class PopupManager {
       }
     });
 
-    // 10. 页脚刷新
     this.elements.refreshDataBtn.addEventListener('click', () => {
       this.loadAllData();
       this.showToast('数据已更新', 'success');
@@ -259,7 +256,6 @@ class PopupManager {
     });
   }
 
-  // 加载用户设置
   async loadSettings() {
     try {
       const res = await chrome.storage.local.get(['timer_settings']);
@@ -317,7 +313,6 @@ class PopupManager {
     await chrome.storage.local.set({ timer_settings: this.settings });
   }
 
-  // 加载全量浏览数据
   async loadAllData() {
     try {
       const res = await chrome.storage.local.get(null);
@@ -329,6 +324,7 @@ class PopupManager {
       });
       this.rawData = raw;
       this.renderStatsTab();
+      this.renderHeatmap();
       this.updateLastUpdateTime();
     } catch (e) {
       console.error('加载数据失败:', e);
@@ -338,6 +334,7 @@ class PopupManager {
   renderStatsTab() {
     const { dates, aggregatedDomains, periodData } = this.getProcessedPeriodData();
     this.renderMetrics(dates, aggregatedDomains);
+    this.renderSmartInsights(aggregatedDomains);
     this.renderChartSection(periodData, aggregatedDomains);
     this.renderWebsitesList(aggregatedDomains);
   }
@@ -402,6 +399,72 @@ class PopupManager {
     });
 
     return { dates, aggregatedDomains, periodData };
+  }
+
+  // 生成智能习惯诊断建议
+  renderSmartInsights(aggregatedDomains) {
+    const list = Object.values(aggregatedDomains);
+    let totalMs = 0;
+    const catMs = { work: 0, video: 0, social: 0, shopping: 0, news: 0, other: 0 };
+
+    list.forEach(d => {
+      totalMs += d.timeSpent;
+      const c = d.category || 'other';
+      if (catMs[c] !== undefined) catMs[c] += d.timeSpent;
+    });
+
+    if (totalMs === 0) {
+      this.elements.smartInsightsText.textContent = '💡 提示：开始浏览网页后，此处将呈现个性化习惯分析。';
+      return;
+    }
+
+    const workMins = Math.round(catMs.work / 60000);
+    const entMins = Math.round((catMs.video + catMs.social + catMs.shopping) / 60000);
+
+    if (workMins > entMins) {
+      this.elements.smartInsightsText.textContent = `🌟 太棒了！您在此期间累计专注工作学习 ${workMins} 分钟，生产力状态极佳！`;
+    } else if (entMins > 120) {
+      this.elements.smartInsightsText.textContent = `💡 提醒：您在娱乐社交类网站已浏览 ${entMins} 分钟，建议开启番茄钟适当休息。`;
+    } else {
+      this.elements.smartInsightsText.textContent = `📊 提示：当前上网节奏较为平衡，工作与休息比例保持良好。`;
+    }
+  }
+
+  // 渲染 GitHub 风格 365 天年度浏览热力图
+  renderHeatmap() {
+    const grid = this.elements.heatmapGrid;
+    grid.innerHTML = '';
+
+    const daysCount = 140; // 呈现 140 天 (约 20 周)
+    const heatData = [];
+    let maxMs = 1;
+
+    for (let i = daysCount - 1; i >= 0; i--) {
+      const dKey = this.getDateKeyOffset(i);
+      const dayObj = this.rawData[dKey] || {};
+      let totalMs = 0;
+      Object.values(dayObj).forEach(v => totalMs += (v.timeSpent || 0));
+      if (totalMs > maxMs) maxMs = totalMs;
+      heatData.push({ dKey, totalMs });
+    }
+
+    heatData.forEach(({ dKey, totalMs }) => {
+      const cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+
+      let level = 0;
+      if (totalMs > 0) {
+        const ratio = totalMs / maxMs;
+        if (ratio > 0.75) level = 4;
+        else if (ratio > 0.5) level = 3;
+        else if (ratio > 0.25) level = 2;
+        else level = 1;
+      }
+
+      cell.classList.add(`sq-${level}`);
+      cell.title = `${dKey}: ${this.formatDuration(totalMs)}`;
+      grid.appendChild(cell);
+    });
   }
 
   renderMetrics(dates, aggregatedDomains) {
@@ -477,7 +540,6 @@ class PopupManager {
     else this.elements.metricScoreRating.textContent = '建议休息 🧘';
   }
 
-  // SVG 图表渲染
   renderChartSection(periodData = null, aggregatedDomains = null) {
     if (!periodData || !aggregatedDomains) {
       const processed = this.getProcessedPeriodData();
@@ -626,7 +688,6 @@ class PopupManager {
     });
   }
 
-  // 4. SVG Donut 矢量环形占比图
   drawDonutChart(svg, aggregatedDomains) {
     const cats = [
       { key: 'work', label: '工作', ms: 0, color: '#10b981' },
@@ -652,7 +713,6 @@ class PopupManager {
     const cx = 80;
     const cy = 60;
     const radius = 40;
-    const strokeWidth = 16;
     const circumference = 2 * Math.PI * radius;
 
     let cumulativeAngle = 0;
@@ -669,7 +729,7 @@ class PopupManager {
       circle.setAttribute('r', radius);
       circle.setAttribute('fill', 'transparent');
       circle.setAttribute('stroke', cat.color);
-      circle.setAttribute('stroke-width', strokeWidth);
+      circle.setAttribute('stroke-width', '16');
       circle.setAttribute('stroke-dasharray', strokeDasharray);
       circle.setAttribute('stroke-dashoffset', strokeDashoffset);
 
@@ -681,7 +741,6 @@ class PopupManager {
       cumulativeAngle += ratio;
     });
 
-    // 右侧图例
     let legY = 16;
     cats.filter(c => c.ms > 0).forEach(cat => {
       const pct = ((cat.ms / totalMs) * 100).toFixed(1);
@@ -707,7 +766,7 @@ class PopupManager {
     });
   }
 
-  // 渲染网站排行列表
+  // 渲染网站排行列表 (带 Hover 快捷动作按钮)
   renderWebsitesList(aggregatedDomains = null) {
     if (!aggregatedDomains) {
       aggregatedDomains = this.getProcessedPeriodData().aggregatedDomains;
@@ -778,20 +837,51 @@ class PopupManager {
               <span>占比 ${pct}% • 访问 ${item.visits || 1}次</span>
             </div>
           </div>
+
+          <!-- Hover 快捷工具栏 -->
+          <div class="hover-actions" onclick="event.stopPropagation();">
+            <button class="hover-btn" title="一键设为30分钟限制" data-quick-limit="${item.domain}">🛑 30m</button>
+            <button class="hover-btn" title="一键加入黑名单" data-quick-black="${item.domain}">🛡️ 屏蔽</button>
+          </div>
         </div>
       `;
     }).join('');
 
-    // 点击某项查看单站历史下钻详情
     container.querySelectorAll('[data-domain-detail]').forEach(el => {
       el.addEventListener('click', () => {
         const domain = el.dataset.domainDetail;
         this.openDomainDetailModal(domain, aggregatedDomains[domain]);
       });
     });
+
+    // 绑定 Hover 快捷按钮事件
+    container.querySelectorAll('[data-quick-limit]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const domain = e.target.dataset.quickLimit;
+        if (!this.settings.dailyLimits) this.settings.dailyLimits = { domains: {} };
+        if (!this.settings.dailyLimits.domains) this.settings.dailyLimits.domains = {};
+        this.settings.dailyLimits.domains[domain] = 1800000; // 30 分钟
+        this.updateSetting('dailyLimits', this.settings.dailyLimits);
+        this.renderDomainLimitsList();
+        this.showToast(`已快捷限制 ${domain} 每日 30 分钟`, 'success');
+      });
+    });
+
+    container.querySelectorAll('[data-quick-black]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const domain = e.target.dataset.quickBlack;
+        if (!this.settings.blackList) this.settings.blackList = [];
+        if (!this.settings.blackList.includes(domain)) {
+          this.settings.blackList.push(domain);
+          this.updateSetting('blackList', this.settings.blackList);
+          this.renderBlacklistTags();
+          this.renderStatsTab();
+          this.showToast(`已一键将 ${domain} 加入黑名单`, 'success');
+        }
+      });
+    });
   }
 
-  // 打开单站历史下钻 Drawer
   openDomainDetailModal(domain, data) {
     if (!domain || !data) return;
 
@@ -802,7 +892,6 @@ class PopupManager {
     const avgSessionMs = Math.round(data.timeSpent / (data.visits || 1));
     this.elements.detailAvgSession.textContent = this.formatDuration(avgSessionMs);
 
-    // 绘制该域名近7天趋势
     const svg = this.elements.detailChartSvg;
     svg.innerHTML = '';
     
@@ -819,7 +908,6 @@ class PopupManager {
       return { dKey, spent };
     });
 
-    const width = 280;
     const height = 80;
     const barW = 24;
 
@@ -862,7 +950,6 @@ class PopupManager {
     }
   }
 
-  // --- 番茄钟 logic ---
   togglePomodoro() {
     if (this.pomodoro.isRunning) {
       clearInterval(this.pomodoro.timerId);
@@ -904,7 +991,6 @@ class PopupManager {
     this.elements.pomoTimerDisplay.textContent = str;
   }
 
-  // --- 限制与设置管理 ---
   saveGlobalLimit() {
     const val = parseInt(this.elements.globalLimitInput.value, 10) || 0;
     const ms = val * 60000;
@@ -964,7 +1050,6 @@ class PopupManager {
     });
   }
 
-  // 自定义分类管理
   addCustomCategory() {
     const domain = this.elements.customCatName.value.trim().toLowerCase();
     const cat = this.elements.customCatSelect.value;
@@ -1052,7 +1137,39 @@ class PopupManager {
     });
   }
 
-  // 导出 JSON 数据
+  // 🧹 一键清理少于 10 秒的微小记录
+  async purgeShortVisits() {
+    try {
+      let purgedCount = 0;
+      const res = await chrome.storage.local.get(null);
+      const dateKeys = Object.keys(res).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
+
+      for (const dKey of dateKeys) {
+        const dayData = res[dKey] || {};
+        const cleaned = {};
+        let modified = false;
+
+        Object.entries(dayData).forEach(([domain, data]) => {
+          if (data.timeSpent >= 10000) { // 10秒
+            cleaned[domain] = data;
+          } else {
+            purgedCount++;
+            modified = true;
+          }
+        });
+
+        if (modified) {
+          await chrome.storage.local.set({ [dKey]: cleaned });
+        }
+      }
+
+      await this.loadAllData();
+      this.showToast(`已清理 ${purgedCount} 条微小测试记录！`, 'success');
+    } catch (e) {
+      this.showToast('清理失败', 'error');
+    }
+  }
+
   async exportJSONData() {
     try {
       const res = await chrome.storage.local.get(null);
@@ -1069,7 +1186,6 @@ class PopupManager {
     }
   }
 
-  // 导出 CSV 报表 (包含 BOM 防止 Excel 乱码)
   exportCSVData() {
     try {
       const { aggregatedDomains } = this.getProcessedPeriodData();
