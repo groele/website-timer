@@ -21,7 +21,9 @@ class WebsiteTimer {
         domains: {}
       },
       customCategories: {},
-      notifiedLimits: {}
+      notifiedLimits: {},
+      pomoBlockDistract: false,
+      siteNotes: {}
     };
 
     this.settings = { ...this.defaultSettings };
@@ -29,6 +31,18 @@ class WebsiteTimer {
     this.initPomodoro();
     this.initializeEventListeners();
     this.updateBadge();
+    this.syncCurrentActiveTab();
+  }
+
+  async syncCurrentActiveTab() {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (tabs && tabs.length > 0 && tabs[0].id) {
+        await this.handleTabChange(tabs[0].id);
+      }
+    } catch (e) {
+      console.log('同步活动标签页失败:', e);
+    }
   }
 
   getTodayKey() {
@@ -80,7 +94,8 @@ class WebsiteTimer {
         'scholar.google.com', 'semanticscholar.org', 'pubmed.ncbi.nlm.nih.gov', 'cnki.net', 'wanfangdata.com.cn',
         'connectedpapers.com', 'researchrabbit.ai', 'webofscience.com', 'scopus.com', 'cqvip.com',
         'overleaf.com', 'zotero.org', 'mendeley.com', 'elicit.org', 'consensus.app', 'scite.ai', 'chatpdf.com', 'arxiv-vanity.com',
-        'openreview.net', 'distill.pub', 'wandb.ai', 'huggingface.co', 'paperswithcode.com', 'crossref.org', 'jstor.org'
+        'openreview.net', 'distill.pub', 'wandb.ai', 'huggingface.co', 'paperswithcode.com', 'crossref.org', 'jstor.org',
+        'chatgpt.com', 'openai.com', 'claude.ai', 'deepseek.com', 'kimi.ai', 'moonshot.cn', 'perplexity.ai', 'notebooklm.google', 'poe.com'
       ],
       work: [
         'github.com', 'stackoverflow.com', 'gitee.com', 'v2ex.com', 'juejin.cn',
@@ -224,6 +239,17 @@ class WebsiteTimer {
             tabId: tab.id
           };
           this.lastActiveTime = Date.now();
+
+          if (this.pomodoro && this.pomodoro.isRunning && !this.pomodoro.isPaused && this.settings.pomoBlockDistract) {
+            const cat = this.getDomainCategory(domain);
+            if (['video', 'social', 'shopping', 'news'].includes(cat)) {
+              this.sendInPageBanner(domain, 0, 0, 100);
+              this.sendNotification(
+                '🛡️ 专注钟进行时防打扰提醒',
+                `您当前正处于 ${this.pomodoro.durationMins} 分钟论文研读专注钟阶段，建议专注于科研与写作！`
+              );
+            }
+          }
         } else {
           this.activeTabInfo = null;
           this.lastActiveTime = null;
@@ -277,11 +303,13 @@ class WebsiteTimer {
       return;
     }
 
-    const domain = this.activeTabInfo.domain;
-    if (this.isBlacklisted(domain)) {
+    const activeTab = { ...this.activeTabInfo };
+    const domain = activeTab.domain;
+    if (!domain || this.isBlacklisted(domain)) {
       return;
     }
 
+    const tabTitle = activeTab.title || domain;
     const now = Date.now();
     const timeSpent = now - this.lastActiveTime;
     const minThreshold = this.settings.minTimeThreshold || 5000;
@@ -290,13 +318,12 @@ class WebsiteTimer {
       return;
     }
 
-    // 立即更新上次活跃时间，防止并发调用计算重复时间段
-    this.lastActiveTime = now;
-
     if (this.isSaving) {
       return;
     }
 
+    // 确认可以开始保存后再更新上次活跃时间，防止并发调用时丢弃累积时间段
+    this.lastActiveTime = now;
     this.isSaving = true;
 
     try {
@@ -321,7 +348,7 @@ class WebsiteTimer {
       if (!todayData[domain] || typeof todayData[domain] !== 'object') {
         todayData[domain] = {
           timeSpent: 0,
-          lastTitle: this.activeTabInfo.title || domain,
+          lastTitle: tabTitle,
           visits: 1,
           lastVisitTime: now,
           category: this.getDomainCategory(domain),
@@ -336,7 +363,7 @@ class WebsiteTimer {
 
       todayData[domain].timeSpent = (todayData[domain].timeSpent || 0) + timeSpent;
       todayData[domain].hourlyUsage[currentHour] = (todayData[domain].hourlyUsage[currentHour] || 0) + timeSpent;
-      todayData[domain].lastTitle = this.activeTabInfo.title || domain;
+      todayData[domain].lastTitle = tabTitle;
       todayData[domain].lastVisit = now;
 
       if (!Array.isArray(todayData._timeline)) {
@@ -354,7 +381,7 @@ class WebsiteTimer {
           time: timeString,
           timestamp: now,
           domain: domain,
-          title: this.activeTabInfo.title || domain,
+          title: tabTitle,
           durationMs: timeSpent,
           category: category
         });
@@ -695,8 +722,10 @@ setInterval(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   console.log('网站使用时长统计器已启动');
+  websiteTimer.syncCurrentActiveTab();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('网站使用时长统计器已安装/重载');
+  websiteTimer.syncCurrentActiveTab();
 });

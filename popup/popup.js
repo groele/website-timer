@@ -37,6 +37,16 @@ class PopupManager {
     return `${year}-${month}-${day}`;
   }
 
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   getDateKeyOffset(offsetDays) {
     const d = new Date();
     d.setDate(d.getDate() - offsetDays);
@@ -110,6 +120,7 @@ class PopupManager {
       
       exportDataBtn: document.getElementById('exportDataBtn'),
       exportCsvBtn: document.getElementById('exportCsvBtn'),
+      exportMdBtn: document.getElementById('exportMdBtn'),
       importDataBtn: document.getElementById('importDataBtn'),
       purgeShortBtn: document.getElementById('purgeShortBtn'),
       importFileInput: document.getElementById('importFileInput'),
@@ -128,7 +139,13 @@ class PopupManager {
       detailVisits: document.getElementById('detailVisits'),
       detailAvgSession: document.getElementById('detailAvgSession'),
       detailChartSvg: document.getElementById('detailChartSvg'),
+      detailNoteInput: document.getElementById('detailNoteInput'),
+      saveDetailNoteBtn: document.getElementById('saveDetailNoteBtn'),
+      pomoBlockDistractToggle: document.getElementById('pomoBlockDistractToggle'),
 
+      weeklyGoalProgressText: document.getElementById('weeklyGoalProgressText'),
+      weeklyGoalProgressBar: document.getElementById('weeklyGoalProgressBar'),
+      weeklyGoalSelect: document.getElementById('weeklyGoalSelect'),
       modalOverlay: document.getElementById('modalOverlay'),
       modalTitle: document.getElementById('modalTitle'),
       modalMessage: document.getElementById('modalMessage'),
@@ -262,6 +279,26 @@ class PopupManager {
 
     this.elements.exportDataBtn.addEventListener('click', () => this.exportJSONData());
     this.elements.exportCsvBtn.addEventListener('click', () => this.exportCSVData());
+    if (this.elements.exportMdBtn) {
+      this.elements.exportMdBtn.addEventListener('click', () => this.exportMarkdownReport());
+    }
+    if (this.elements.saveDetailNoteBtn) {
+      this.elements.saveDetailNoteBtn.addEventListener('click', () => this.saveSiteNote());
+    }
+    if (this.elements.pomoBlockDistractToggle) {
+      this.elements.pomoBlockDistractToggle.addEventListener('change', (e) => {
+        this.updateSetting('pomoBlockDistract', e.target.checked);
+        this.showToast(e.target.checked ? '已开启专注防打扰提醒' : '已关闭专注防打扰提醒', 'success');
+      });
+    }
+    if (this.elements.weeklyGoalSelect) {
+      this.elements.weeklyGoalSelect.addEventListener('change', (e) => {
+        const val = parseInt(e.target.value, 10);
+        this.updateSetting('weeklyAcademicGoalHours', val);
+        this.renderStatsTab();
+        this.showToast(`本周科研目标更新为: ${val} 小时`, 'success');
+      });
+    }
     this.elements.importDataBtn.addEventListener('click', () => this.elements.importFileInput.click());
     this.elements.purgeShortBtn.addEventListener('click', () => this.purgeShortVisits());
     this.elements.importFileInput.addEventListener('change', (e) => this.importJSONData(e));
@@ -322,7 +359,10 @@ class PopupManager {
         subdomainGrouping: false,
         dailyLimits: { global: 0, domains: {} },
         customCategories: {},
-        theme: 'sunset'
+        theme: 'sunset',
+        pomoBlockDistract: false,
+        siteNotes: {},
+        weeklyAcademicGoalHours: 20
       };
 
       this.settings = { ...defaultSettings, ...(res.timer_settings || {}) };
@@ -335,6 +375,12 @@ class PopupManager {
   applySettingsToUI() {
     this.elements.pauseTimerToggle.checked = !!this.settings.isPaused;
     this.elements.subdomainGroupToggle.checked = !!this.settings.subdomainGrouping;
+    if (this.elements.pomoBlockDistractToggle) {
+      this.elements.pomoBlockDistractToggle.checked = !!this.settings.pomoBlockDistract;
+    }
+    if (this.elements.weeklyGoalSelect && this.settings.weeklyAcademicGoalHours) {
+      this.elements.weeklyGoalSelect.value = this.settings.weeklyAcademicGoalHours.toString();
+    }
     
     if (this.settings.breakReminderMins !== undefined) {
       this.elements.breakReminderSelect.value = this.settings.breakReminderMins.toString();
@@ -388,6 +434,7 @@ class PopupManager {
 
   renderStatsTab() {
     const { dates, aggregatedDomains, periodData } = this.getProcessedPeriodData();
+    this.renderWeeklyGoalProgress();
     this.renderMetrics(dates, aggregatedDomains);
     this.renderSmartInsights(aggregatedDomains);
     this.renderChartSection(periodData, aggregatedDomains);
@@ -397,6 +444,37 @@ class PopupManager {
     } else {
       this.renderTimeline();
     }
+  }
+
+  renderWeeklyGoalProgress() {
+    if (!this.elements.weeklyGoalProgressText || !this.elements.weeklyGoalProgressBar) return;
+    
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      last7Days.push(this.getDateKeyOffset(i));
+    }
+    
+    let academicMs = 0;
+    last7Days.forEach(dKey => {
+      const dayObj = this.rawData[dKey];
+      if (dayObj && typeof dayObj === 'object') {
+        Object.entries(dayObj).forEach(([domain, data]) => {
+          if (domain !== '_timeline' && data && typeof data === 'object') {
+            const cat = data.category || (this.settings.customCategories?.[domain]);
+            if (cat === 'academic') {
+              academicMs += (data.timeSpent || 0);
+            }
+          }
+        });
+      }
+    });
+    
+    const academicHours = (academicMs / 3600000).toFixed(1);
+    const targetHours = this.settings.weeklyAcademicGoalHours || 20;
+    const pct = Math.min(100, Math.round((academicHours / targetHours) * 100));
+    
+    this.elements.weeklyGoalProgressText.textContent = `${academicHours} / ${targetHours} 小时 (${pct}%)`;
+    this.elements.weeklyGoalProgressBar.style.width = `${pct}%`;
   }
 
   getProcessedPeriodData() {
@@ -500,16 +578,18 @@ class PopupManager {
 
     container.innerHTML = events.map(ev => {
       const durStr = this.formatDuration(ev.durationMs);
+      const safeDomain = this.escapeHtml(ev.domain);
+      const safeTitle = this.escapeHtml(ev.title || ev.domain);
       return `
         <div class="timeline-item">
           <div class="timeline-dot"></div>
-          <div class="timeline-time">${ev.time || '12:00'}</div>
+          <div class="timeline-time">${this.escapeHtml(ev.time || '12:00')}</div>
           <div class="timeline-content">
             <div class="timeline-header-row">
-              <span class="timeline-domain">${ev.domain}</span>
+              <span class="timeline-domain">${safeDomain}</span>
               <span class="timeline-dur">+${durStr}</span>
             </div>
-            <div class="timeline-page-title truncate">${ev.title || ev.domain}</div>
+            <div class="timeline-page-title truncate">${safeTitle}</div>
           </div>
         </div>
       `;
@@ -1051,9 +1131,14 @@ class PopupManager {
   openDomainDetailModal(domain, data) {
     if (!domain || !data) return;
 
+    this.currentInspectingDomain = domain;
     this.elements.detailDomainName.textContent = domain;
     this.elements.detailTotalTime.textContent = this.formatDuration(data.timeSpent);
     this.elements.detailVisits.textContent = `${data.visits || 1} 次`;
+
+    if (this.elements.detailNoteInput) {
+      this.elements.detailNoteInput.value = this.settings.siteNotes?.[domain] || '';
+    }
 
     const avgSessionMs = Math.round(data.timeSpent / (data.visits || 1));
     this.elements.detailAvgSession.textContent = this.formatDuration(avgSessionMs);
@@ -1098,6 +1183,22 @@ class PopupManager {
     });
 
     this.elements.domainDetailModal.style.display = 'flex';
+  }
+
+  saveSiteNote() {
+    const domain = this.currentInspectingDomain;
+    if (!domain) return;
+    const note = this.elements.detailNoteInput ? this.elements.detailNoteInput.value.trim() : '';
+    if (!this.settings.siteNotes) {
+      this.settings.siteNotes = {};
+    }
+    if (note) {
+      this.settings.siteNotes[domain] = note;
+    } else {
+      delete this.settings.siteNotes[domain];
+    }
+    this.updateSetting('siteNotes', this.settings.siteNotes);
+    this.showToast(`已保存 ${domain} 的科研备注`, 'success');
   }
 
   formatDuration(milliseconds) {
@@ -1420,6 +1521,85 @@ class PopupManager {
       this.showToast('CSV 报表导出成功！', 'success');
     } catch (e) {
       this.showToast('CSV 导出失败', 'error');
+    }
+  }
+
+  exportMarkdownReport() {
+    try {
+      const { aggregatedDomains, totalMs } = this.getProcessedPeriodData();
+      const domainList = Object.values(aggregatedDomains);
+
+      if (domainList.length === 0) {
+        this.showToast('暂无数据可导出为 Markdown 简报', 'error');
+        return;
+      }
+
+      domainList.sort((a, b) => b.timeSpent - a.timeSpent);
+
+      const periodNames = {
+        today: '今日', yesterday: '昨日', week: '近 7 天', month: '近 30 天', all: '全部历史'
+      };
+      const periodLabel = periodNames[this.currentPeriod] || '统计';
+
+      const catLabels = {
+        academic: '🎓 学术科研', work: '💻 工作学习', social: '💬 社交通讯', video: '📹 视频娱乐',
+        shopping: '🛍️ 购物消费', news: '📰 新闻资讯', other: '🌐 其他网页'
+      };
+
+      const catMs = { academic: 0, work: 0, video: 0, social: 0, shopping: 0, news: 0, other: 0 };
+      domainList.forEach(item => {
+        const c = item.category || 'other';
+        if (catMs[c] !== undefined) catMs[c] += item.timeSpent;
+      });
+
+      const academicTime = this.formatDuration(catMs.academic);
+      const workTime = this.formatDuration(catMs.work);
+      const totalTimeStr = this.formatDuration(totalMs);
+      const academicPct = totalMs > 0 ? ((catMs.academic / totalMs) * 100).toFixed(1) : '0';
+
+      let md = `# 🎓 网页浏览与科研专注 ${periodLabel}简报 (${this.getTodayKey()})\n\n`;
+      md += `## 📊 总体数据概览\n`;
+      md += `- **总浏览时长**：${totalTimeStr}\n`;
+      md += `- **🎓 学术科研时长**：${academicTime} (占比 ${academicPct}%)\n`;
+      md += `- **💻 工作学习时长**：${workTime}\n`;
+      md += `- **🔥 连续专注打卡**：${this.elements.streakDaysVal ? this.elements.streakDaysVal.textContent : 1} 天\n\n`;
+
+      md += `## 🏷️ 各分类耗时统计\n`;
+      Object.entries(catMs).forEach(([catKey, ms]) => {
+        if (ms > 0) {
+          const catName = catLabels[catKey] || catKey;
+          const pct = totalMs > 0 ? ((ms / totalMs) * 100).toFixed(1) : '0';
+          md += `- **${catName}**：${this.formatDuration(ms)} (${pct}%)\n`;
+        }
+      });
+      md += `\n`;
+
+      md += `## 🏆 常用网站 Top 10\n`;
+      md += `| 排名 | 域名 | 类别 | 使用时长 | 访问次数 | 课题/科研备注 |\n`;
+      md += `| :---: | :--- | :--- | :--- | :---: | :--- |\n`;
+
+      const siteNotes = this.settings.siteNotes || {};
+      domainList.slice(0, 10).forEach((item, index) => {
+        const catName = catLabels[item.category] || '其他';
+        const durationStr = this.formatDuration(item.timeSpent);
+        const note = siteNotes[item.domain] || '-';
+        md += `| ${index + 1} | \`${item.domain}\` | ${catName} | ${durationStr} | ${item.visits || 1} 次 | ${note} |\n`;
+      });
+
+      md += `\n---\n*本简报由 [网站使用时长统计器 - 博士科研版] 自动生成于 ${new Date().toLocaleString('zh-CN')}*\n`;
+
+      const encodedUri = "data:text/markdown;charset=utf-8," + encodeURIComponent(md);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `website-timer-phd-report-${this.getTodayKey()}.md`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      this.showToast('Markdown 简报导出成功！', 'success');
+    } catch (e) {
+      console.error(e);
+      this.showToast('Markdown 导出失败', 'error');
     }
   }
 

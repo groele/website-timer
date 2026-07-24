@@ -36,6 +36,19 @@
 
       <!-- TAB 1: 📊 统计大盘 -->
       <section id="statsTab" class="tab-content active">
+        <!-- 🎯 本周学术科研目标进度条卡片 -->
+        <div class="section-card goal-card" style="background: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(168,85,247,0.15) 100%); border: 1px solid rgba(99,102,241,0.25); margin-bottom: 12px; padding: 12px 14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <span>🎯</span> 本周学术科研研读目标
+            </span>
+            <span id="weeklyGoalProgressText" style="font-size:12px; font-weight:600; color:var(--primary);">0.0 / 20 小时 (0%)</span>
+          </div>
+          <div class="progress-track" style="height: 8px; background: rgba(0,0,0,0.15); border-radius:4px; overflow:hidden;">
+            <div id="weeklyGoalProgressBar" class="progress-fill" style="width: 0%; height:100%; background: linear-gradient(90deg, #6366f1 0%, #a855f7 100%); transition: width 0.4s ease;"></div>
+          </div>
+        </div>
+
         <!-- 时间段切换 Pills -->
         <div class="period-selector">
           <button class="period-btn active" data-period="today">今日</button>
@@ -206,6 +219,14 @@
             <button id="pomoStartBtn" class="btn btn-primary btn-glow">开始专注</button>
             <button id="pomoResetBtn" class="btn btn-secondary">重置</button>
           </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.15); font-size: 12px;">
+            <span>🛡️ 专注钟进行时防打扰提醒</span>
+            <label class="toggle-switch" style="transform: scale(0.85); transform-origin: right center;">
+              <input type="checkbox" id="pomoBlockDistractToggle">
+              <span class="slider"></span>
+            </label>
+          </div>
         </div>
 
         <!-- 🏅 连续自律打卡与成就勋章 -->
@@ -374,6 +395,23 @@
           </div>
         </div>
 
+        <!-- 本周科研目标设置 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">🎯</span>
+            <h3>本周学术科研目标时长</h3>
+          </div>
+          <p class="section-desc">设定每周希望投入学术研读与工作学习的目标小时数。</p>
+          <div class="form-row">
+            <select id="weeklyGoalSelect" class="form-select">
+              <option value="10">每周 10 小时 (轻度研读)</option>
+              <option value="20" selected>每周 20 小时 (标准科研 默认)</option>
+              <option value="30">每周 30 小时 (深度研读)</option>
+              <option value="40">每周 40 小时 (全职科研)</option>
+            </select>
+          </div>
+        </div>
+
         <!-- 保留策略与高级参数 -->
         <div class="section-card">
           <div class="card-header-title">
@@ -401,6 +439,7 @@
           <div class="action-buttons-grid">
             <button id="exportDataBtn" class="btn btn-secondary">📥 导出 JSON 数据</button>
             <button id="exportCsvBtn" class="btn btn-secondary">📊 导出 CSV 报表</button>
+            <button id="exportMdBtn" class="btn btn-secondary">📄 导出 MD 简报</button>
             <button id="importDataBtn" class="btn btn-secondary">📤 导入 JSON 数据</button>
             <button id="purgeShortBtn" class="btn btn-secondary">🧹 清理微小记录(&lt;10s)</button>
             <input type="file" id="importFileInput" accept=".json" style="display: none;">
@@ -452,6 +491,13 @@
         <div class="detail-chart-box">
           <div class="detail-chart-title">近7天每日浏览趋势</div>
           <svg id="detailChartSvg" viewBox="0 0 280 80"></svg>
+        </div>
+        <div class="detail-note-box" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.1));">
+          <div class="detail-chart-title" style="margin-bottom: 6px;">📝 网站科研备注 / 课题笔记</div>
+          <div class="form-inline-group">
+            <input type="text" id="detailNoteInput" placeholder="记录如：arXiv论文研读/项目代码库..." style="flex:1;">
+            <button id="saveDetailNoteBtn" class="btn btn-primary btn-sm">保存</button>
+          </div>
         </div>
       </div>
     </div>
