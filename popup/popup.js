@@ -1013,6 +1013,42 @@ class PopupManager {
     });
   }
 
+  getFriendlyDomainName(domain) {
+    if (!domain) return '';
+    const map = {
+      'arxiv.org': 'ArXiv 论文预印本',
+      'biorxiv.org': 'bioRxiv 生物预印本',
+      'medrxiv.org': 'medRxiv 医学预印本',
+      'nature.com': 'Nature 自然期刊',
+      'science.org': 'Science 科学期刊',
+      'ieee.org': 'IEEE Xplore 学会文献',
+      'acm.org': 'ACM 计算机协会',
+      'sciencedirect.com': 'ScienceDirect 文献库',
+      'scholar.google.com': '谷歌学术 Scholar',
+      'overleaf.com': 'Overleaf LaTeX 排版',
+      'zotero.org': 'Zotero 文献管理',
+      'chatgpt.com': 'ChatGPT AI 助手',
+      'openai.com': 'OpenAI 平台',
+      'claude.ai': 'Claude AI 助手',
+      'deepseek.com': 'DeepSeek 深度求索 AI',
+      'kimi.ai': 'Kimi AI 助手',
+      'moonshot.cn': '月之暗面 Kimi AI',
+      'perplexity.ai': 'Perplexity AI 搜索',
+      'github.com': 'GitHub 代码托管',
+      'stackoverflow.com': 'Stack Overflow 问答',
+      'gitee.com': 'Gitee 代码托管',
+      'bilibili.com': '哔哩哔哩 Bilibili',
+      'zhihu.com': '知乎问答社区',
+      'notion.so': 'Notion 笔记工作区',
+      'feishu.cn': '飞书协同工作台',
+      'v2ex.com': 'V2EX 开发者社区',
+      'csdn.net': 'CSDN 开发者社区',
+      'juejin.cn': '稀土掘金技术社区',
+      'cnki.net': '中国知网 CNKI'
+    };
+    return map[domain.toLowerCase()] || domain;
+  }
+
   renderWebsitesList(aggregatedDomains = null) {
     if (!aggregatedDomains) {
       aggregatedDomains = this.getProcessedPeriodData().aggregatedDomains;
@@ -1029,7 +1065,8 @@ class PopupManager {
     if (this.searchQuery) {
       domainList = domainList.filter(d => 
         d.domain.toLowerCase().includes(this.searchQuery) || 
-        (d.lastTitle && d.lastTitle.toLowerCase().includes(this.searchQuery))
+        (d.lastTitle && d.lastTitle.toLowerCase().includes(this.searchQuery)) ||
+        (this.getFriendlyDomainName(d.domain).toLowerCase().includes(this.searchQuery))
       );
     }
 
@@ -1062,17 +1099,22 @@ class PopupManager {
       const initialLetter = item.domain.charAt(0).toUpperCase();
 
       const catClass = item.category === 'academic' ? 'cat-academic' : '';
+      const safeDomain = this.escapeHtml(item.domain);
+      const friendlyName = this.escapeHtml(this.getFriendlyDomainName(item.domain));
+      const titleDisplay = (friendlyName !== safeDomain) ? 
+        `${friendlyName} <small style="opacity:0.6; font-size:11px; font-weight:normal; margin-left:4px;">(${safeDomain})</small>` : 
+        safeDomain;
 
       return `
         <div class="website-item" data-domain-detail="${item.domain}">
           <div class="site-icon-wrapper">
-            <img src="${faviconUrl}" alt="${item.domain}" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+            <img src="${faviconUrl}" alt="${safeDomain}" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
             <span style="display:none">${initialLetter}</span>
           </div>
 
           <div class="site-body">
             <div class="site-title-row">
-              <span class="site-name-text truncate" title="${item.domain}">${item.domain}</span>
+              <span class="site-name-text truncate" title="${safeDomain}">${titleDisplay}</span>
               <span class="site-time-text">${durationStr}</span>
             </div>
             
