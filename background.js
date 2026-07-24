@@ -298,6 +298,32 @@ class WebsiteTimer {
     }
   }
 
+  splitDurationByHourAndDay(startTime, endTime) {
+    const chunks = [];
+    let curr = startTime;
+    while (curr < endTime) {
+      const d = new Date(curr);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateKey = `${year}-${month}-${day}`;
+      const hour = d.getHours();
+
+      const nextHour = new Date(d);
+      nextHour.setMinutes(0, 0, 0);
+      nextHour.setHours(nextHour.getHours() + 1);
+
+      const chunkEnd = Math.min(endTime, nextHour.getTime());
+      const durationMs = chunkEnd - curr;
+
+      if (durationMs > 0) {
+        chunks.push({ dateKey, hour, durationMs });
+      }
+      curr = chunkEnd;
+    }
+    return chunks;
+  }
+
   async saveTimeSpent() {
     if (!this.activeTabInfo || !this.lastActiveTime || this.settings.isPaused) {
       return;
@@ -311,7 +337,8 @@ class WebsiteTimer {
 
     const tabTitle = activeTab.title || domain;
     const now = Date.now();
-    const timeSpent = now - this.lastActiveTime;
+    const startTime = this.lastActiveTime;
+    const timeSpent = now - startTime;
     const minThreshold = this.settings.minTimeThreshold || 5000;
 
     if (timeSpent < minThreshold) {
@@ -322,84 +349,85 @@ class WebsiteTimer {
       return;
     }
 
-    // 确认可以开始保存后再更新上次活跃时间，防止并发调用时丢弃累积时间段
     this.lastActiveTime = now;
     this.isSaving = true;
 
-    try {
-      this.continuousActiveTime += timeSpent;
-      this.checkBreakReminder();
+    return this.runInStorageQueue(async () => {
+      try {
+        this.continuousActiveTime += timeSpent;
+        this.checkBreakReminder();
 
-      const today = this.getTodayKey();
-      if (today !== this.currentDay) {
-        await this.resetDailyData();
-        this.currentDay = today;
-      }
-
-      const nowDate = new Date(now);
-      const currentHour = nowDate.getHours();
-      const timeString = nowDate.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-
-      const result = await chrome.storage.local.get([this.currentDay]);
-      const todayData = (result && typeof result[this.currentDay] === 'object' && result[this.currentDay] !== null)
-        ? result[this.currentDay]
-        : {};
-
-      if (!todayData[domain] || typeof todayData[domain] !== 'object') {
-        todayData[domain] = {
-          timeSpent: 0,
-          lastTitle: tabTitle,
-          visits: 1,
-          lastVisitTime: now,
-          category: this.getDomainCategory(domain),
-          hourlyUsage: new Array(24).fill(0)
-        };
-      }
-
-      if (!Array.isArray(todayData[domain].hourlyUsage) || todayData[domain].hourlyUsage.length !== 24) {
-        todayData[domain].hourlyUsage = new Array(24).fill(0);
-      }
-      todayData[domain].category = this.getDomainCategory(domain);
-
-      todayData[domain].timeSpent = (todayData[domain].timeSpent || 0) + timeSpent;
-      todayData[domain].hourlyUsage[currentHour] = (todayData[domain].hourlyUsage[currentHour] || 0) + timeSpent;
-      todayData[domain].lastTitle = tabTitle;
-      todayData[domain].lastVisit = now;
-
-      if (!Array.isArray(todayData._timeline)) {
-        todayData._timeline = [];
-      }
-
-      const category = this.getDomainCategory(domain);
-      const lastEvent = todayData._timeline[todayData._timeline.length - 1];
-
-      if (lastEvent && lastEvent.domain === domain && (now - (lastEvent.timestamp || 0) < 120000)) {
-        lastEvent.durationMs = (lastEvent.durationMs || 0) + timeSpent;
-        lastEvent.timestamp = now;
-      } else {
-        todayData._timeline.push({
-          time: timeString,
-          timestamp: now,
-          domain: domain,
-          title: tabTitle,
-          durationMs: timeSpent,
-          category: category
-        });
-
-        if (todayData._timeline.length > 100) {
-          todayData._timeline.shift();
+        const today = this.getTodayKey();
+        if (today !== this.currentDay) {
+          await this.resetDailyData();
+          this.currentDay = today;
         }
-      }
 
-      await chrome.storage.local.set({ [this.currentDay]: todayData });
-      
-      this.updateBadge(todayData);
-      this.checkLimits(domain, todayData);
-    } catch (error) {
-      console.error('保存时间数据失败:', error);
-    } finally {
-      this.isSaving = false;
-    }
+        const chunks = this.splitDurationByHourAndDay(startTime, now);
+        for (const chunk of chunks) {
+          const { dateKey, hour, durationMs } = chunk;
+          const result = await chrome.storage.local.get([dateKey]);
+          const dayData = (result && typeof result[dateKey] === 'object' && result[dateKey] !== null)
+            ? result[dateKey]
+            : {};
+
+          if (!dayData[domain] || typeof dayData[domain] !== 'object') {
+            dayData[domain] = {
+              timeSpent: 0,
+              lastTitle: tabTitle,
+              visits: 1,
+              lastVisitTime: now,
+              category: this.getDomainCategory(domain),
+              hourlyUsage: new Array(24).fill(0)
+            };
+          }
+
+          if (!Array.isArray(dayData[domain].hourlyUsage) || dayData[domain].hourlyUsage.length !== 24) {
+            dayData[domain].hourlyUsage = new Array(24).fill(0);
+          }
+          dayData[domain].category = this.getDomainCategory(domain);
+
+          dayData[domain].timeSpent = (dayData[domain].timeSpent || 0) + durationMs;
+          dayData[domain].hourlyUsage[hour] = (dayData[domain].hourlyUsage[hour] || 0) + durationMs;
+          dayData[domain].lastTitle = tabTitle;
+          dayData[domain].lastVisit = now;
+
+          if (!Array.isArray(dayData._timeline)) {
+            dayData._timeline = [];
+          }
+
+          const category = this.getDomainCategory(domain);
+          const timeString = new Date(now).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          const lastEvent = dayData._timeline[dayData._timeline.length - 1];
+
+          if (lastEvent && lastEvent.domain === domain && (now - (lastEvent.timestamp || 0) < 120000)) {
+            lastEvent.durationMs = (lastEvent.durationMs || 0) + durationMs;
+            lastEvent.timestamp = now;
+          } else {
+            dayData._timeline.push({
+              time: timeString,
+              timestamp: now,
+              domain: domain,
+              title: tabTitle,
+              durationMs: durationMs,
+              category: category
+            });
+
+            if (dayData._timeline.length > 100) {
+              dayData._timeline.shift();
+            }
+          }
+
+          await chrome.storage.local.set({ [dateKey]: dayData });
+          this.updateBadge(dayData);
+          this.checkLimits(domain, dayData);
+        }
+      } catch (error) {
+        console.error('保存时间数据失败:', error);
+      } finally {
+        this.isSaving = false;
+      }
+    });
   }
 
   checkBreakReminder() {

@@ -146,6 +146,11 @@ class PopupManager {
       weeklyGoalProgressText: document.getElementById('weeklyGoalProgressText'),
       weeklyGoalProgressBar: document.getElementById('weeklyGoalProgressBar'),
       weeklyGoalSelect: document.getElementById('weeklyGoalSelect'),
+      nextLevelText: document.getElementById('nextLevelText'),
+      streakLevelBar: document.getElementById('streakLevelBar'),
+      storageUsedText: document.getElementById('storageUsedText'),
+      storageSpanText: document.getElementById('storageSpanText'),
+      storageUsageBar: document.getElementById('storageUsageBar'),
       modalOverlay: document.getElementById('modalOverlay'),
       modalTitle: document.getElementById('modalTitle'),
       modalMessage: document.getElementById('modalMessage'),
@@ -426,10 +431,31 @@ class PopupManager {
       this.renderStatsTab();
       this.renderHeatmap();
       this.renderStreakAndAchievements();
+      this.renderStorageHealth();
       this.updateLastUpdateTime();
     } catch (e) {
       console.error('加载数据失败:', e);
     }
+  }
+
+  renderStorageHealth() {
+    if (!chrome.storage.local.getBytesInUse) return;
+    chrome.storage.local.getBytesInUse(null, (bytes) => {
+      const kb = (bytes / 1024).toFixed(1);
+      const mb = (bytes / (1024 * 1024)).toFixed(2);
+      const spanDays = Object.keys(this.rawData).length;
+
+      if (this.elements.storageUsedText) {
+        this.elements.storageUsedText.textContent = bytes > 1048576 ? `${mb} MB` : `${kb} KB`;
+      }
+      if (this.elements.storageSpanText) {
+        this.elements.storageSpanText.textContent = `${spanDays} 天`;
+      }
+      if (this.elements.storageUsageBar) {
+        const pct = Math.min(100, Math.max(1, Math.round((bytes / 5242880) * 100)));
+        this.elements.storageUsageBar.style.width = `${pct}%`;
+      }
+    });
   }
 
   renderStatsTab() {
@@ -687,20 +713,59 @@ class PopupManager {
       }
     }
 
+    const displayStreak = streakDays || (Object.keys(this.rawData).length > 0 ? 1 : 0);
+
     if (this.elements.streakDaysVal) {
-      this.elements.streakDaysVal.textContent = streakDays || (Object.keys(this.rawData).length > 0 ? 1 : 0);
+      this.elements.streakDaysVal.textContent = displayStreak;
+    }
+
+    let nextLevelName = '科研学霸 (7天)';
+    let targetDays = 7;
+    let prevDays = 1;
+
+    if (displayStreak >= 60) {
+      nextLevelName = '已达成最高成就 👑';
+      targetDays = 60;
+      prevDays = 60;
+    } else if (displayStreak >= 30) {
+      nextLevelName = '博士终结者 (60天)';
+      targetDays = 60;
+      prevDays = 30;
+    } else if (displayStreak >= 14) {
+      nextLevelName = '科研狂魔 (30天)';
+      targetDays = 30;
+      prevDays = 14;
+    } else if (displayStreak >= 7) {
+      nextLevelName = '自律达人 (14天)';
+      targetDays = 14;
+      prevDays = 7;
+    }
+
+    if (this.elements.nextLevelText) {
+      const need = Math.max(0, targetDays - displayStreak);
+      this.elements.nextLevelText.textContent = displayStreak >= 60 ? 
+        '👑 已解锁终极成就' : 
+        `下一等级: ${nextLevelName} (还需${need}天)`;
+    }
+
+    if (this.elements.streakLevelBar) {
+      const pct = displayStreak >= 60 ? 100 : Math.min(100, Math.round(((displayStreak - prevDays) / (targetDays - prevDays || 1)) * 100));
+      this.elements.streakLevelBar.style.width = `${Math.max(5, pct)}%`;
     }
 
     if (this.elements.achievementBadges) {
-      const displayStreak = streakDays || (Object.keys(this.rawData).length > 0 ? 1 : 0);
-      const badgePioneer = displayStreak >= 1 ? 'active' : '';
-      const badgeScholar = displayStreak >= 7 ? 'active' : '';
-      const badgeMaster = displayStreak >= 30 ? 'active' : '';
+      const b1 = displayStreak >= 1 ? 'active' : '';
+      const b2 = displayStreak >= 7 ? 'active' : '';
+      const b3 = displayStreak >= 14 ? 'active' : '';
+      const b4 = displayStreak >= 30 ? 'active' : '';
+      const b5 = displayStreak >= 60 ? 'active' : '';
 
       this.elements.achievementBadges.innerHTML = `
-        <div class="badge-item ${badgePioneer}" title="专注先锋：连续 1 天保持高效">🌱 专注先锋</div>
-        <div class="badge-item ${badgeScholar}" title="科研学霸：连续 7 天论文研读">🎓 科研学霸</div>
-        <div class="badge-item ${badgeMaster}" title="自律达人：连续 30 天坚持科研打卡">⚡ 自律达人</div>
+        <div class="badge-item ${b1}" title="专注先锋：连续 1 天保持高效">🌱 专注先锋 (1天)</div>
+        <div class="badge-item ${b2}" title="科研学霸：连续 7 天论文研读">🎓 科研学霸 (7天)</div>
+        <div class="badge-item ${b3}" title="自律达人：连续 14 天坚持打卡">⚡ 自律达人 (14天)</div>
+        <div class="badge-item ${b4}" title="科研狂魔：连续 30 天深度科研">🔥 科研狂魔 (30天)</div>
+        <div class="badge-item ${b5}" title="博士终结者：连续 60 天巅峰专注">👑 博士终结者 (60天)</div>
       `;
     }
   }

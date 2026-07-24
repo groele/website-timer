@@ -238,11 +238,19 @@
           <p class="section-desc">保持良好科研习惯，解锁自律勋章！</p>
 
           <div class="streak-box">
-            <div class="streak-count">🔥 连续达标 <span id="streakDaysVal">1</span> 天</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div class="streak-count" style="margin-bottom:0;">🔥 连续自律打卡 <span id="streakDaysVal">1</span> 天</div>
+              <span id="nextLevelText" style="font-size:12px; font-weight:600; opacity:0.85;">下一等级: 科研学霸 (还需6天)</span>
+            </div>
+            <div class="progress-track" style="height: 6px; background: rgba(0,0,0,0.15); margin-bottom:12px; border-radius:3px; overflow:hidden;">
+              <div id="streakLevelBar" class="progress-fill" style="width: 14%; height:100%; background: linear-gradient(90deg, #f59e0b 0%, #ef4444 100%); transition: width 0.4s ease;"></div>
+            </div>
             <div class="achievement-grid" id="achievementBadges">
-              <div class="badge-item active" title="专注先锋：连续 1 天保持高效">🌱 专注先锋</div>
-              <div class="badge-item" title="科研学霸：连续 7 天论文研读">🎓 科研学霸</div>
-              <div class="badge-item" title="自律达人：专注得分连续保持 80+">⚡ 自律达人</div>
+              <div class="badge-item active" title="专注先锋：连续 1 天保持高效">🌱 专注先锋 (1天)</div>
+              <div class="badge-item" title="科研学霸：连续 7 天论文研读">🎓 科研学霸 (7天)</div>
+              <div class="badge-item" title="自律达人：连续 14 天坚持打卡">⚡ 自律达人 (14天)</div>
+              <div class="badge-item" title="科研狂魔：连续 30 天深度科研">🔥 科研狂魔 (30天)</div>
+              <div class="badge-item" title="博士终结者：连续 60 天巅峰专注">👑 博士终结者 (60天)</div>
             </div>
           </div>
         </div>
@@ -426,6 +434,21 @@
               <option value="180">保留近 180 天数据</option>
               <option value="0">永久保留历史数据</option>
             </select>
+          </div>
+        </div>
+
+        <!-- 存储空间与健康度诊断 -->
+        <div class="section-card">
+          <div class="card-header-title">
+            <span class="header-icon">📊</span>
+            <h3>存储空间与健康度诊断</h3>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
+            <span>Chrome 本地存储已用: <strong id="storageUsedText">-- KB</strong></span>
+            <span>历史记录跨度: <strong id="storageSpanText">-- 天</strong></span>
+          </div>
+          <div class="progress-track" style="height:6px; background:rgba(0,0,0,0.15); border-radius:3px; overflow:hidden;">
+            <div id="storageUsageBar" class="progress-fill" style="width: 1%; height:100%; background:var(--primary); transition: width 0.4s ease;"></div>
           </div>
         </div>
 
