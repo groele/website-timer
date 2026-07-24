@@ -130,15 +130,23 @@ class PageActivityDetector {
       <button id="wtCloseBannerBtn" style="background:transparent; border:none; color:white; font-size:16px; cursor:pointer; padding:0 4px;">✕</button>
     `;
 
-    document.body.appendChild(banner);
+    const mountTarget = document.body || document.documentElement;
+    if (mountTarget) {
+      mountTarget.appendChild(banner);
+    } else {
+      document.addEventListener('DOMContentLoaded', () => {
+        (document.body || document.documentElement).appendChild(banner);
+      });
+    }
 
-    document.getElementById('wtCloseBannerBtn').onclick = () => {
-      banner.remove();
-    };
+    const closeBtn = banner.querySelector('#wtCloseBannerBtn');
+    if (closeBtn) {
+      closeBtn.onclick = () => banner.remove();
+    }
 
     // 8 秒后自动收起
     setTimeout(() => {
-      if (document.body.contains(banner)) {
+      if (banner.parentNode) {
         banner.remove();
       }
     }, 8000);

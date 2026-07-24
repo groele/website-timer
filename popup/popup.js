@@ -12,11 +12,8 @@ class PopupManager {
     this.rawData = {};
     this.settings = {};
 
-    this.pomodoro = {
-      timerId: null,
-      secondsLeft: 1500,
-      isRunning: false
-    };
+    this.pomodoroState = null;
+    this.pomoUiInterval = null;
 
     this.init();
   }
@@ -26,18 +23,27 @@ class PopupManager {
     this.setupEventListeners();
     await this.loadSettings();
     await this.loadAllData();
+    await this.loadPomodoroState();
+    this.startPomodoroUiTimer();
     this.updateCurrentDateDisplay();
     this.startAutoRefresh();
   }
 
   getTodayKey() {
-    return new Date().toISOString().split('T')[0];
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   getDateKeyOffset(offsetDays) {
     const d = new Date();
     d.setDate(d.getDate() - offsetDays);
-    return d.toISOString().split('T')[0];
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   bindDOM() {
@@ -80,6 +86,7 @@ class PopupManager {
       pomoStartBtn: document.getElementById('pomoStartBtn'),
       pomoResetBtn: document.getElementById('pomoResetBtn'),
       streakDaysVal: document.getElementById('streakDaysVal'),
+      achievementBadges: document.getElementById('achievementBadges'),
 
       globalLimitInput: document.getElementById('globalLimitInput'),
       saveGlobalLimitBtn: document.getElementById('saveGlobalLimitBtn'),
@@ -283,7 +290,22 @@ class PopupManager {
 
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local') {
-        this.loadAllData();
+        if (changes.pomodoro_state) {
+          this.syncPomodoroUI(changes.pomodoro_state.newValue);
+        } else {
+          this.loadAllData();
+        }
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (this.elements.domainDetailModal && this.elements.domainDetailModal.style.display !== 'none') {
+          this.elements.domainDetailModal.style.display = 'none';
+        }
+        if (this.elements.modalOverlay && this.elements.modalOverlay.style.display !== 'none') {
+          this.elements.modalOverlay.style.display = 'none';
+        }
       }
     });
   }
@@ -357,6 +379,7 @@ class PopupManager {
       this.rawData = raw;
       this.renderStatsTab();
       this.renderHeatmap();
+      this.renderStreakAndAchievements();
       this.updateLastUpdateTime();
     } catch (e) {
       console.error('加载数据失败:', e);
@@ -528,7 +551,7 @@ class PopupManager {
     const grid = this.elements.heatmapGrid;
     grid.innerHTML = '';
 
-    const daysCount = 140;
+    const daysCount = 70;
     const heatData = [];
     let maxMs = 1;
 
@@ -539,7 +562,6 @@ class PopupManager {
       Object.entries(dayObj).forEach(([k, v]) => {
         if (k !== '_timeline') totalMs += (v.timeSpent || 0);
       });
-      if (totalMs > maxMs) maxMs = totalMs;
       heatData.push({ dKey, totalMs });
     }
 
@@ -548,18 +570,59 @@ class PopupManager {
       cell.className = 'heatmap-cell';
 
       let level = 0;
-      if (totalMs > 0) {
-        const ratio = totalMs / maxMs;
-        if (ratio > 0.75) level = 4;
-        else if (ratio > 0.5) level = 3;
-        else if (ratio > 0.25) level = 2;
-        else level = 1;
+      const mins = Math.round(totalMs / 60000);
+
+      if (mins > 0) {
+        if (mins < 30) level = 1;        // 1 - 30 分钟：浅亮
+        else if (mins < 120) level = 2;  // 30分钟 - 2小时：中度亮
+        else if (mins < 240) level = 3;  // 2 - 4 小时：高亮
+        else level = 4;                  // > 4 小时：满亮
       }
 
       cell.classList.add(`sq-${level}`);
-      cell.title = `${dKey}: ${this.formatDuration(totalMs)}`;
+      cell.title = totalMs > 0 ? `${dKey}: 浏览 ${this.formatDuration(totalMs)}` : `${dKey}: 0 分钟 (未打卡)`;
       grid.appendChild(cell);
     });
+  }
+
+  renderStreakAndAchievements() {
+    let streakDays = 0;
+    for (let i = 0; i < 365; i++) {
+      const dKey = this.getDateKeyOffset(i);
+      const dayObj = this.rawData[dKey];
+
+      let dayTotal = 0;
+      if (dayObj && typeof dayObj === 'object') {
+        Object.entries(dayObj).forEach(([k, v]) => {
+          if (k !== '_timeline' && v && typeof v === 'object') {
+            dayTotal += (v.timeSpent || 0);
+          }
+        });
+      }
+
+      if (dayTotal > 0) {
+        streakDays++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+
+    if (this.elements.streakDaysVal) {
+      this.elements.streakDaysVal.textContent = streakDays || (Object.keys(this.rawData).length > 0 ? 1 : 0);
+    }
+
+    if (this.elements.achievementBadges) {
+      const displayStreak = streakDays || (Object.keys(this.rawData).length > 0 ? 1 : 0);
+      const badgePioneer = displayStreak >= 1 ? 'active' : '';
+      const badgeScholar = displayStreak >= 7 ? 'active' : '';
+      const badgeMaster = displayStreak >= 30 ? 'active' : '';
+
+      this.elements.achievementBadges.innerHTML = `
+        <div class="badge-item ${badgePioneer}" title="专注先锋：连续 1 天保持高效">🌱 专注先锋</div>
+        <div class="badge-item ${badgeScholar}" title="科研学霸：连续 7 天论文研读">🎓 科研学霸</div>
+        <div class="badge-item ${badgeMaster}" title="自律达人：连续 30 天坚持科研打卡">⚡ 自律达人</div>
+      `;
+    }
   }
 
   renderMetrics(dates, aggregatedDomains) {
@@ -923,7 +986,7 @@ class PopupManager {
       return `
         <div class="website-item" data-domain-detail="${item.domain}">
           <div class="site-icon-wrapper">
-            <img src="${faviconUrl}" alt="${item.domain}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <img src="${faviconUrl}" alt="${item.domain}" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
             <span style="display:none">${initialLetter}</span>
           </div>
 
@@ -1053,52 +1116,72 @@ class PopupManager {
     }
   }
 
-  setPomodoroPreset(mins) {
-    this.resetPomodoro();
-    this.pomodoro.secondsLeft = mins * 60;
+  async loadPomodoroState() {
+    try {
+      const res = await chrome.storage.local.get(['pomodoro_state']);
+      if (res.pomodoro_state) {
+        this.syncPomodoroUI(res.pomodoro_state);
+      }
+    } catch (e) {}
+  }
+
+  syncPomodoroUI(pState) {
+    if (!pState) return;
+    this.pomodoroState = pState;
+
+    this.elements.pomoPresetBtns.forEach(btn => {
+      const mins = parseInt(btn.dataset.mins, 10);
+      btn.classList.toggle('active', mins === pState.durationMins);
+    });
+
+    if (pState.isRunning && !pState.isPaused && pState.endTime) {
+      this.elements.pomoStartBtn.textContent = '暂停';
+      this.elements.pomoStatusText.textContent = '🔥 科研论文沉浸专注中...';
+    } else if (pState.isPaused) {
+      this.elements.pomoStartBtn.textContent = '继续专注';
+      this.elements.pomoStatusText.textContent = '已暂停';
+    } else {
+      this.elements.pomoStartBtn.textContent = '开始专注';
+      this.elements.pomoStatusText.textContent = '准备就绪';
+    }
+
     this.updatePomoDisplay();
+  }
+
+  startPomodoroUiTimer() {
+    if (this.pomoUiInterval) clearInterval(this.pomoUiInterval);
+    this.pomoUiInterval = setInterval(() => {
+      this.updatePomoDisplay();
+    }, 1000);
+  }
+
+  updatePomoDisplay() {
+    if (!this.pomodoroState) return;
+    const pState = this.pomodoroState;
+    let secondsLeft = pState.remainingSecs || (pState.durationMins ? pState.durationMins * 60 : 1500);
+
+    if (pState.isRunning && !pState.isPaused && pState.endTime) {
+      secondsLeft = Math.max(0, Math.ceil((pState.endTime - Date.now()) / 1000));
+    }
+
+    const mins = Math.floor(secondsLeft / 60);
+    const secs = secondsLeft % 60;
+    const str = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    this.elements.pomoTimerDisplay.textContent = str;
+  }
+
+  setPomodoroPreset(mins) {
+    chrome.runtime.sendMessage({ type: 'POMODORO_SET_PRESET', mins }).catch(() => {});
     this.showToast(`番茄钟设定为 ${mins} 分钟`, 'info');
   }
 
   togglePomodoro() {
-    if (this.pomodoro.isRunning) {
-      clearInterval(this.pomodoro.timerId);
-      this.pomodoro.isRunning = false;
-      this.elements.pomoStartBtn.textContent = '继续专注';
-      this.elements.pomoStatusText.textContent = '已暂停';
-    } else {
-      this.pomodoro.isRunning = true;
-      this.elements.pomoStartBtn.textContent = '暂停';
-      this.elements.pomoStatusText.textContent = '🔥 科研论文沉浸专注中...';
-
-      this.pomodoro.timerId = setInterval(() => {
-        this.pomodoro.secondsLeft--;
-        this.updatePomoDisplay();
-
-        if (this.pomodoro.secondsLeft <= 0) {
-          clearInterval(this.pomodoro.timerId);
-          this.pomodoro.isRunning = false;
-          this.showToast('🎉 番茄钟专注完成！研读辛苦了，休息放松一下吧。', 'success');
-          this.resetPomodoro();
-        }
-      }, 1000);
-    }
+    chrome.runtime.sendMessage({ type: 'POMODORO_TOGGLE' }).catch(() => {});
   }
 
   resetPomodoro() {
-    clearInterval(this.pomodoro.timerId);
-    this.pomodoro.isRunning = false;
-    this.pomodoro.secondsLeft = 1500;
-    this.elements.pomoStartBtn.textContent = '开始专注';
-    this.elements.pomoStatusText.textContent = '准备就绪';
-    this.updatePomoDisplay();
-  }
-
-  updatePomoDisplay() {
-    const mins = Math.floor(this.pomodoro.secondsLeft / 60);
-    const secs = this.pomodoro.secondsLeft % 60;
-    const str = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    this.elements.pomoTimerDisplay.textContent = str;
+    chrome.runtime.sendMessage({ type: 'POMODORO_RESET' }).catch(() => {});
+    this.showToast('番茄钟已重置', 'info');
   }
 
   saveGlobalLimit() {
@@ -1317,7 +1400,7 @@ class PopupManager {
       let csvContent = "\uFEFF域名,最后页面标题,分类,使用时长(分钟),总秒数,访问次数,单次平均停留(秒)\n";
 
       domainList.forEach(item => {
-        const title = (item.lastTitle || item.domain).replace(/,/g, '，');
+        const title = (item.lastTitle || item.domain).replace(/"/g, '""');
         const mins = (item.timeSpent / 60000).toFixed(1);
         const secs = Math.round(item.timeSpent / 1000);
         const visits = item.visits || 1;
@@ -1348,7 +1431,7 @@ class PopupManager {
     reader.onload = async (e) => {
       try {
         const imported = JSON.parse(e.target.result);
-        if (typeof imported === 'object') {
+        if (typeof imported === 'object' && imported !== null) {
           await chrome.storage.local.set(imported);
           await this.loadSettings();
           await this.loadAllData();
@@ -1358,6 +1441,8 @@ class PopupManager {
         }
       } catch (err) {
         this.showToast('导入失败：文件 JSON 格式不合法', 'error');
+      } finally {
+        event.target.value = '';
       }
     };
     reader.readAsText(file);
@@ -1382,18 +1467,24 @@ class PopupManager {
     this.elements.modalMessage.textContent = msg;
     this.elements.modalOverlay.style.display = 'flex';
 
-    const handleConfirm = () => {
-      onConfirm();
-      cleanup();
-    };
-
-    const cleanup = () => {
+    const closeModal = () => {
       this.elements.modalOverlay.style.display = 'none';
-      this.elements.modalConfirmBtn.removeEventListener('click', handleConfirm);
+      this.elements.modalConfirmBtn.onclick = null;
+      this.elements.modalCancelBtn.onclick = null;
+      this.elements.modalOverlay.onclick = null;
     };
 
-    this.elements.modalConfirmBtn.addEventListener('click', handleConfirm);
-    this.elements.modalCancelBtn.onclick = cleanup;
+    this.elements.modalConfirmBtn.onclick = () => {
+      closeModal();
+      onConfirm();
+    };
+
+    this.elements.modalCancelBtn.onclick = closeModal;
+    this.elements.modalOverlay.onclick = (e) => {
+      if (e.target === this.elements.modalOverlay) {
+        closeModal();
+      }
+    };
   }
 
   showToast(msg, type = 'info') {

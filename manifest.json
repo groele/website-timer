@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "网站使用时长统计器",
-  "version": "1.4",
+  "version": "1.8",
   "description": "统计并显示每日各网站的使用时长",
   "permissions": [
     "tabs",
     "storage",
     "idle",
     "activeTab",
-    "notifications"
+    "notifications",
+    "unlimitedStorage",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>"

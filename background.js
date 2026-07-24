@@ -6,6 +6,7 @@ class WebsiteTimer {
     this.lastActiveTime = null;
     this.continuousActiveTime = 0;
     this.isUserActive = true;
+    this.isSaving = false;
     this.currentDay = this.getTodayKey();
     
     this.defaultSettings = {
@@ -25,12 +26,17 @@ class WebsiteTimer {
 
     this.settings = { ...this.defaultSettings };
     this.initSettings();
+    this.initPomodoro();
     this.initializeEventListeners();
     this.updateBadge();
   }
 
   getTodayKey() {
-    return new Date().toISOString().split('T')[0];
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   extractDomain(url) {
@@ -43,7 +49,11 @@ class WebsiteTimer {
 
       if (this.settings.subdomainGrouping) {
         const parts = host.split('.');
-        if (parts.length > 2) {
+        const doubleTlds = ['com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn', 'co.uk', 'org.uk', 'ac.uk', 'co.jp'];
+        const lastTwo = parts.slice(-2).join('.');
+        if (doubleTlds.includes(lastTwo) && parts.length > 3) {
+          host = parts.slice(-3).join('.');
+        } else if (!doubleTlds.includes(lastTwo) && parts.length > 2) {
           host = parts.slice(-2).join('.');
         }
       }
@@ -53,7 +63,7 @@ class WebsiteTimer {
     }
   }
 
-  // 自动推断网站分类 (增加博士科研 Academic 分类)
+  // 自动推断网站分类 (基于常用学术、开发、娱乐网站数据库)
   getDomainCategory(domain) {
     if (!domain) return 'other';
     
@@ -69,13 +79,15 @@ class WebsiteTimer {
         'acs.org', 'rsc.org', 'cell.com', 'pnas.org', 'plos.org', 'frontiersin.org', 'mdpi.com', 'iop.org', 'aps.org',
         'scholar.google.com', 'semanticscholar.org', 'pubmed.ncbi.nlm.nih.gov', 'cnki.net', 'wanfangdata.com.cn',
         'connectedpapers.com', 'researchrabbit.ai', 'webofscience.com', 'scopus.com', 'cqvip.com',
-        'overleaf.com', 'zotero.org', 'mendeley.com', 'elicit.org', 'consensus.app', 'scite.ai', 'chatpdf.com', 'arxiv-vanity.com'
+        'overleaf.com', 'zotero.org', 'mendeley.com', 'elicit.org', 'consensus.app', 'scite.ai', 'chatpdf.com', 'arxiv-vanity.com',
+        'openreview.net', 'distill.pub', 'wandb.ai', 'huggingface.co', 'paperswithcode.com', 'crossref.org', 'jstor.org'
       ],
       work: [
         'github.com', 'stackoverflow.com', 'gitee.com', 'v2ex.com', 'juejin.cn',
         'csdn.net', 'cnblogs.com', 'gitlab.com', 'notion.so', 'feishu.cn',
-        'dingtalk.com', 'docs.qq.com', 'yuque.com', 'segmentfault.com', 'leetcodes.cn',
-        'leetcode.com', 'w3schools.com', 'developer.mozilla.org', 'figma.com', 'npm.js'
+        'dingtalk.com', 'docs.qq.com', 'yuque.com', 'segmentfault.com', 'leetcode.cn',
+        'leetcode.com', 'w3schools.com', 'w3school.com.cn', 'developer.mozilla.org', 'figma.com', 'npmjs.com',
+        'github.io', 'gitee.io', 'replicate.com', 'modal.com', 'kaggle.com', 'replit.com', 'codepen.io'
       ],
       social: [
         'weibo.com', 'twitter.com', 'x.com', 'facebook.com', 'instagram.com',
@@ -160,6 +172,37 @@ class WebsiteTimer {
         this.updateBadge();
       }
     });
+
+    if (chrome.alarms) {
+      chrome.alarms.onAlarm.addListener((alarm) => {
+        if (alarm.name === 'pomodoro_timer') {
+          this.handlePomodoroComplete();
+        }
+      });
+    }
+
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (!message) return true;
+
+      if (message.type === 'PAGE_ACTIVITY_STATUS') {
+        if (message.data && message.data.isActive && this.activeTabInfo && sender.tab && sender.tab.id === this.activeTabInfo.tabId) {
+          if (message.data.title) {
+            this.activeTabInfo.title = message.data.title;
+          }
+        }
+        sendResponse({ success: true });
+      } else if (message.type === 'POMODORO_SET_PRESET') {
+        this.setPomodoroPreset(message.mins).then(() => sendResponse({ success: true }));
+        return true;
+      } else if (message.type === 'POMODORO_TOGGLE') {
+        this.togglePomodoro().then(() => sendResponse({ success: true }));
+        return true;
+      } else if (message.type === 'POMODORO_RESET') {
+        this.resetPomodoro().then(() => sendResponse({ success: true }));
+        return true;
+      }
+      return true;
+    });
   }
 
   async handleTabChange(tabId) {
@@ -221,6 +264,11 @@ class WebsiteTimer {
     } else if (state === 'active') {
       this.isUserActive = true;
       this.lastActiveTime = Date.now();
+      chrome.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+        if (tabs && tabs.length > 0) {
+          this.handleTabChange(tabs[0].id);
+        }
+      }).catch(() => {});
     }
   }
 
@@ -234,65 +282,77 @@ class WebsiteTimer {
       return;
     }
 
-    const timeSpent = Date.now() - this.lastActiveTime;
+    const now = Date.now();
+    const timeSpent = now - this.lastActiveTime;
     const minThreshold = this.settings.minTimeThreshold || 5000;
 
     if (timeSpent < minThreshold) {
       return;
     }
 
-    this.continuousActiveTime += timeSpent;
-    this.checkBreakReminder();
+    // 立即更新上次活跃时间，防止并发调用计算重复时间段
+    this.lastActiveTime = now;
 
-    const today = this.getTodayKey();
-    if (today !== this.currentDay) {
-      await this.resetDailyData();
-      this.currentDay = today;
+    if (this.isSaving) {
+      return;
     }
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const timeString = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    this.isSaving = true;
 
     try {
-      const result = await chrome.storage.local.get([this.currentDay]);
-      const todayData = result[this.currentDay] || {};
+      this.continuousActiveTime += timeSpent;
+      this.checkBreakReminder();
 
-      if (!todayData[domain]) {
+      const today = this.getTodayKey();
+      if (today !== this.currentDay) {
+        await this.resetDailyData();
+        this.currentDay = today;
+      }
+
+      const nowDate = new Date(now);
+      const currentHour = nowDate.getHours();
+      const timeString = nowDate.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+      const result = await chrome.storage.local.get([this.currentDay]);
+      const todayData = (result && typeof result[this.currentDay] === 'object' && result[this.currentDay] !== null)
+        ? result[this.currentDay]
+        : {};
+
+      if (!todayData[domain] || typeof todayData[domain] !== 'object') {
         todayData[domain] = {
           timeSpent: 0,
           lastTitle: this.activeTabInfo.title || domain,
           visits: 1,
-          lastVisitTime: Date.now(),
+          lastVisitTime: now,
           category: this.getDomainCategory(domain),
           hourlyUsage: new Array(24).fill(0)
         };
       }
 
-      if (!todayData[domain].hourlyUsage) {
+      if (!Array.isArray(todayData[domain].hourlyUsage) || todayData[domain].hourlyUsage.length !== 24) {
         todayData[domain].hourlyUsage = new Array(24).fill(0);
       }
       todayData[domain].category = this.getDomainCategory(domain);
 
-      todayData[domain].timeSpent += timeSpent;
+      todayData[domain].timeSpent = (todayData[domain].timeSpent || 0) + timeSpent;
       todayData[domain].hourlyUsage[currentHour] = (todayData[domain].hourlyUsage[currentHour] || 0) + timeSpent;
       todayData[domain].lastTitle = this.activeTabInfo.title || domain;
-      todayData[domain].lastVisit = Date.now();
+      todayData[domain].lastVisit = now;
 
-      if (!todayData._timeline) {
+      if (!Array.isArray(todayData._timeline)) {
         todayData._timeline = [];
       }
 
       const category = this.getDomainCategory(domain);
       const lastEvent = todayData._timeline[todayData._timeline.length - 1];
 
-      if (lastEvent && lastEvent.domain === domain && (Date.now() - lastEvent.timestamp < 120000)) {
-        lastEvent.durationMs += timeSpent;
-        lastEvent.timestamp = Date.now();
+      if (lastEvent && lastEvent.domain === domain && (now - (lastEvent.timestamp || 0) < 120000)) {
+        lastEvent.durationMs = (lastEvent.durationMs || 0) + timeSpent;
+        lastEvent.timestamp = now;
       } else {
         todayData._timeline.push({
           time: timeString,
-          timestamp: Date.now(),
+          timestamp: now,
           domain: domain,
           title: this.activeTabInfo.title || domain,
           durationMs: timeSpent,
@@ -310,9 +370,9 @@ class WebsiteTimer {
       this.checkLimits(domain, todayData);
     } catch (error) {
       console.error('保存时间数据失败:', error);
+    } finally {
+      this.isSaving = false;
     }
-
-    this.lastActiveTime = Date.now();
   }
 
   checkBreakReminder() {
@@ -330,6 +390,7 @@ class WebsiteTimer {
         `您已连续专注浏览网页 ${reminderMins} 分钟！建议站起来活动身体，远眺放松眼睛。`
       );
       notified[breakKey] = true;
+      this.settings.notifiedLimits = notified;
       chrome.storage.local.set({ timer_settings: { ...this.settings, notifiedLimits: notified } });
     }
   }
@@ -340,9 +401,11 @@ class WebsiteTimer {
     const today = this.getTodayKey();
     try {
       const result = await chrome.storage.local.get([today]);
-      const todayData = result[today] || {};
-      
-      if (!todayData[domain]) {
+      const todayData = (result && typeof result[today] === 'object' && result[today] !== null)
+        ? result[today]
+        : {};
+
+      if (!todayData[domain] || typeof todayData[domain] !== 'object') {
         todayData[domain] = {
           timeSpent: 0,
           lastTitle: title || domain,
@@ -367,6 +430,7 @@ class WebsiteTimer {
   }
 
   checkLimits(domain, todayData) {
+    if (!todayData || typeof todayData !== 'object') return;
     const limits = this.settings.dailyLimits || {};
     const todayKey = this.getTodayKey();
     const notified = this.settings.notifiedLimits || {};
@@ -374,7 +438,7 @@ class WebsiteTimer {
     if (limits.global && limits.global > 0) {
       let totalMs = 0;
       Object.entries(todayData).forEach(([k, d]) => {
-        if (k !== '_timeline') totalMs += (d.timeSpent || 0);
+        if (k !== '_timeline' && d && typeof d === 'object') totalMs += (d.timeSpent || 0);
       });
       
       const globalNotifiedKey = `${todayKey}_global`;
@@ -384,6 +448,7 @@ class WebsiteTimer {
           `您今日的网页浏览总时长已达到 ${(limits.global / 3600000).toFixed(1)} 小时限制！`
         );
         notified[globalNotifiedKey] = true;
+        this.settings.notifiedLimits = notified;
         chrome.storage.local.set({ timer_settings: { ...this.settings, notifiedLimits: notified } });
       }
     }
@@ -397,6 +462,7 @@ class WebsiteTimer {
       if (pct >= 80 && pct < 100 && !notified[warn80Key]) {
         this.sendInPageBanner(domain, Math.round(domainSpentMs / 60000), Math.round(domainLimitMs / 60000), pct);
         notified[warn80Key] = true;
+        this.settings.notifiedLimits = notified;
         chrome.storage.local.set({ timer_settings: { ...this.settings, notifiedLimits: notified } });
       }
 
@@ -408,6 +474,7 @@ class WebsiteTimer {
         );
         this.sendInPageBanner(domain, Math.round(domainSpentMs / 60000), Math.round(domainLimitMs / 60000), 100);
         notified[domainNotifiedKey] = true;
+        this.settings.notifiedLimits = notified;
         chrome.storage.local.set({ timer_settings: { ...this.settings, notifiedLimits: notified } });
       }
     }
@@ -451,9 +518,13 @@ class WebsiteTimer {
         todayData = result[today] || {};
       }
 
+      if (typeof todayData !== 'object' || todayData === null) {
+        todayData = {};
+      }
+
       let totalMs = 0;
       Object.entries(todayData).forEach(([k, d]) => {
-        if (k !== '_timeline') totalMs += (d.timeSpent || 0);
+        if (k !== '_timeline' && d && typeof d === 'object') totalMs += (d.timeSpent || 0);
       });
 
       if (totalMs === 0) {
@@ -480,6 +551,7 @@ class WebsiteTimer {
   async resetDailyData() {
     try {
       const result = await chrome.storage.local.get(null);
+      if (!result) return;
       const keys = Object.keys(result);
       const dateKeys = keys.filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key));
       
@@ -487,7 +559,10 @@ class WebsiteTimer {
       if (retentionDays > 0) {
         const cutoffDateObj = new Date();
         cutoffDateObj.setDate(cutoffDateObj.getDate() - retentionDays);
-        const cutoffDate = cutoffDateObj.toISOString().split('T')[0];
+        const year = cutoffDateObj.getFullYear();
+        const month = String(cutoffDateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(cutoffDateObj.getDate()).padStart(2, '0');
+        const cutoffDate = `${year}-${month}-${day}`;
         
         const keysToRemove = dateKeys.filter(key => key < cutoffDate);
         if (keysToRemove.length > 0) {
@@ -504,6 +579,107 @@ class WebsiteTimer {
     if (this.isUserActive && this.activeTabInfo && this.lastActiveTime && !this.settings.isPaused) {
       await this.saveTimeSpent();
     }
+  }
+
+  async initPomodoro() {
+    try {
+      const res = await chrome.storage.local.get(['pomodoro_state']);
+      if (res.pomodoro_state) {
+        this.pomodoro = res.pomodoro_state;
+        if (this.pomodoro.isRunning && !this.pomodoro.isPaused && this.pomodoro.endTime) {
+          const remain = Math.max(0, Math.ceil((this.pomodoro.endTime - Date.now()) / 1000));
+          if (remain <= 0) {
+            await this.handlePomodoroComplete();
+          }
+        }
+      } else {
+        this.pomodoro = {
+          isRunning: false,
+          isPaused: false,
+          durationMins: 25,
+          remainingSecs: 1500,
+          endTime: null
+        };
+        await chrome.storage.local.set({ pomodoro_state: this.pomodoro });
+      }
+    } catch (e) {
+      console.error('初始化番茄钟状态失败:', e);
+    }
+  }
+
+  async setPomodoroPreset(mins) {
+    if (chrome.alarms) {
+      chrome.alarms.clear('pomodoro_timer');
+    }
+    this.pomodoro = {
+      isRunning: false,
+      isPaused: false,
+      durationMins: mins,
+      remainingSecs: mins * 60,
+      endTime: null
+    };
+    await chrome.storage.local.set({ pomodoro_state: this.pomodoro });
+  }
+
+  async togglePomodoro() {
+    if (this.pomodoro.isRunning && !this.pomodoro.isPaused) {
+      if (chrome.alarms) {
+        chrome.alarms.clear('pomodoro_timer');
+      }
+      if (this.pomodoro.endTime) {
+        const remain = Math.max(0, Math.ceil((this.pomodoro.endTime - Date.now()) / 1000));
+        this.pomodoro.remainingSecs = remain;
+      }
+      this.pomodoro.isRunning = false;
+      this.pomodoro.isPaused = true;
+      this.pomodoro.endTime = null;
+    } else {
+      const remainMs = (this.pomodoro.remainingSecs || (this.pomodoro.durationMins * 60)) * 1000;
+      const endTime = Date.now() + remainMs;
+      this.pomodoro.isRunning = true;
+      this.pomodoro.isPaused = false;
+      this.pomodoro.endTime = endTime;
+
+      if (chrome.alarms) {
+        chrome.alarms.create('pomodoro_timer', { when: endTime });
+      }
+    }
+    await chrome.storage.local.set({ pomodoro_state: this.pomodoro });
+  }
+
+  async resetPomodoro() {
+    if (chrome.alarms) {
+      chrome.alarms.clear('pomodoro_timer');
+    }
+    const mins = this.pomodoro?.durationMins || 25;
+    this.pomodoro = {
+      isRunning: false,
+      isPaused: false,
+      durationMins: mins,
+      remainingSecs: mins * 60,
+      endTime: null
+    };
+    await chrome.storage.local.set({ pomodoro_state: this.pomodoro });
+  }
+
+  async handlePomodoroComplete() {
+    if (chrome.alarms) {
+      chrome.alarms.clear('pomodoro_timer');
+    }
+    const mins = this.pomodoro?.durationMins || 25;
+    this.pomodoro = {
+      isRunning: false,
+      isPaused: false,
+      durationMins: mins,
+      remainingSecs: mins * 60,
+      endTime: null
+    };
+    await chrome.storage.local.set({ pomodoro_state: this.pomodoro });
+
+    this.sendNotification(
+      '🎉 番茄钟专注完成！',
+      `您已成功完成 ${mins} 分钟科研专注！研读辛苦了，建议休息放松一下眼睛。`
+    );
   }
 }
 
