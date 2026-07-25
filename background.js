@@ -722,6 +722,19 @@ class WebsiteTimer {
     await chrome.storage.local.set({ pomodoro_state: this.pomodoro });
   }
 
+  checkDailyRollover() {
+    const today = this.getTodayKey();
+    if (today !== this.currentDay) {
+      this.currentDay = today;
+      this.continuousActiveTime = 0;
+      if (this.settings) {
+        this.settings.notifiedLimits = {};
+        chrome.storage.local.set({ timer_settings: this.settings });
+      }
+      this.updateBadge({});
+    }
+  }
+
   async handlePomodoroComplete() {
     if (chrome.alarms) {
       chrome.alarms.clear('pomodoro_timer');
@@ -746,19 +759,18 @@ class WebsiteTimer {
 const websiteTimer = new WebsiteTimer();
 
 setInterval(() => {
+  websiteTimer.checkDailyRollover();
   websiteTimer.forceSave();
 }, 15000);
 
-setInterval(() => {
-  websiteTimer.resetDailyData();
-}, 43200000);
-
 chrome.runtime.onStartup.addListener(() => {
   console.log('网站使用时长统计器已启动');
+  websiteTimer.checkDailyRollover();
   websiteTimer.syncCurrentActiveTab();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('网站使用时长统计器已安装/重载');
+  websiteTimer.checkDailyRollover();
   websiteTimer.syncCurrentActiveTab();
 });
