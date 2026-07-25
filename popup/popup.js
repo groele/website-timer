@@ -1015,7 +1015,7 @@ class PopupManager {
     let totalMs = 0;
 
     Object.values(aggregatedDomains).forEach(d => {
-      const tags = this.settings.siteTags?.[d.domain] || this.getSuggestedTags(d.domain);
+      const tags = (this.settings.siteTags && this.settings.siteTags[d.domain]) || this.getSuggestedTags(d.domain);
       if (Array.isArray(tags) && tags.length > 0) {
         tags.forEach(t => {
           tagMsMap[t] = (tagMsMap[t] || 0) + d.timeSpent;
@@ -1057,6 +1057,24 @@ class PopupManager {
 
       currentY += 16;
     });
+  }
+
+  getSuggestedTags(domain) {
+    if (!domain) return [];
+    if (this.settings.siteTags && this.settings.siteTags[domain]) {
+      return this.settings.siteTags[domain];
+    }
+    const dLower = String(domain).toLowerCase();
+    if (dLower.includes('arxiv') || dLower.includes('nature') || dLower.includes('scholar') || dLower.includes('ieee') || dLower.includes('cnki') || dLower.includes('sciencedirect')) {
+      return ['#文献研读'];
+    }
+    if (dLower.includes('github') || dLower.includes('leetcode') || dLower.includes('stackoverflow') || dLower.includes('gitee')) {
+      return ['#代码开发'];
+    }
+    if (dLower.includes('chatgpt') || dLower.includes('claude') || dLower.includes('deepseek') || dLower.includes('openai') || dLower.includes('perplexity')) {
+      return ['#AI科研'];
+    }
+    return [];
   }
 
   drawTrendChart(svg, periodData) {
