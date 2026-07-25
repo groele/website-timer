@@ -158,6 +158,7 @@ class PopupManager {
       storageUsedText: document.getElementById('storageUsedText'),
       storageSpanText: document.getElementById('storageSpanText'),
       storageUsageBar: document.getElementById('storageUsageBar'),
+      overlayQuoteText: document.getElementById('overlayQuoteText'),
       modalOverlay: document.getElementById('modalOverlay'),
       modalTitle: document.getElementById('modalTitle'),
       modalMessage: document.getElementById('modalMessage'),
@@ -313,6 +314,9 @@ class PopupManager {
     }
     if (this.elements.pomoFullscreenBtn) {
       this.elements.pomoFullscreenBtn.addEventListener('click', () => {
+        if (this.elements.overlayQuoteText) {
+          this.elements.overlayQuoteText.textContent = this.getRandomQuote();
+        }
         if (this.elements.pomoFocusOverlay) this.elements.pomoFocusOverlay.style.display = 'flex';
       });
     }
@@ -331,6 +335,17 @@ class PopupManager {
         this.resetPomodoro();
       });
     }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (this.elements.pomoFocusOverlay && this.elements.pomoFocusOverlay.style.display === 'flex') {
+          this.elements.pomoFocusOverlay.style.display = 'none';
+        } else if (this.elements.domainDetailModal && this.elements.domainDetailModal.style.display === 'flex') {
+          this.elements.domainDetailModal.style.display = 'none';
+        } else if (this.elements.modalOverlay && this.elements.modalOverlay.style.display === 'flex') {
+          this.elements.modalOverlay.style.display = 'none';
+        }
+      }
+    });
     this.elements.importDataBtn.addEventListener('click', () => this.elements.importFileInput.click());
     this.elements.purgeShortBtn.addEventListener('click', () => this.purgeShortVisits());
     this.elements.importFileInput.addEventListener('change', (e) => this.importJSONData(e));
@@ -1359,6 +1374,46 @@ class PopupManager {
     } catch (e) {}
   }
 
+  playPomodoroChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      
+      const playNote = (freq, startTime, duration) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+        gain.gain.setValueAtTime(0.15, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+
+      const now = ctx.currentTime;
+      playNote(523.25, now, 0.4);       // C5
+      playNote(659.25, now + 0.15, 0.4); // E5
+      playNote(783.99, now + 0.3, 0.8);  // G5
+    } catch (e) {}
+  }
+
+  getRandomQuote() {
+    const quotes = [
+      '“科研是一场马拉松，唯有沉心专注，方能登峰造极。”',
+      '“Paper writing is a marathon, not a sprint.”',
+      '“日拱一卒，功不唐捐；每日推进一点论文。”',
+      '“Deep work is the superpower of the 21st century.”',
+      '“沉心研读文献，构建扎实的理论基石。”',
+      '“Success is the sum of small efforts, repeated day in and day out.”',
+      '“灵感来自于不懈的思考与大量的文献阅读。”',
+      '“保持专注，享受破解科研难题的时刻。”'
+    ];
+    return quotes[Math.floor(Math.random() * quotes.length)];
+  }
+
   syncPomodoroUI(pState) {
     if (!pState) return;
     this.pomodoroState = pState;
@@ -1368,16 +1423,22 @@ class PopupManager {
       btn.classList.toggle('active', mins === pState.durationMins);
     });
 
+    let statusMsg = '准备就绪';
+    let btnMsg = '开始专注';
+
     if (pState.isRunning && !pState.isPaused && pState.endTime) {
-      this.elements.pomoStartBtn.textContent = '暂停';
-      this.elements.pomoStatusText.textContent = '🔥 科研论文沉浸专注中...';
+      btnMsg = '暂停';
+      statusMsg = '🔥 科研论文沉浸专注中...';
     } else if (pState.isPaused) {
-      this.elements.pomoStartBtn.textContent = '继续专注';
-      this.elements.pomoStatusText.textContent = '已暂停';
-    } else {
-      this.elements.pomoStartBtn.textContent = '开始专注';
-      this.elements.pomoStatusText.textContent = '准备就绪';
+      btnMsg = '继续专注';
+      statusMsg = '已暂停';
     }
+
+    this.elements.pomoStartBtn.textContent = btnMsg;
+    this.elements.pomoStatusText.textContent = statusMsg;
+
+    if (this.elements.overlayStartBtn) this.elements.overlayStartBtn.textContent = btnMsg;
+    if (this.elements.overlayStatusText) this.elements.overlayStatusText.textContent = statusMsg;
 
     this.updatePomoDisplay();
   }
@@ -1396,12 +1457,21 @@ class PopupManager {
 
     if (pState.isRunning && !pState.isPaused && pState.endTime) {
       secondsLeft = Math.max(0, Math.ceil((pState.endTime - Date.now()) / 1000));
+      if (secondsLeft === 0 && !this._hasChimed) {
+        this._hasChimed = true;
+        this.playPomodoroChime();
+      } else if (secondsLeft > 0) {
+        this._hasChimed = false;
+      }
     }
 
     const mins = Math.floor(secondsLeft / 60);
     const secs = secondsLeft % 60;
     const str = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     this.elements.pomoTimerDisplay.textContent = str;
+    if (this.elements.overlayTimerDisplay) {
+      this.elements.overlayTimerDisplay.textContent = str;
+    }
   }
 
   setPomodoroPreset(mins) {
