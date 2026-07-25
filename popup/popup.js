@@ -1344,7 +1344,14 @@ class PopupManager {
       shopping: '🛍️购物', news: '📰资讯', other: '网页'
     };
 
-    container.innerHTML = domainList.map(item => {
+    container.innerHTML = domainList.map((item, index) => {
+      const rank = index + 1;
+      let rankHtml = '';
+      if (rank === 1) rankHtml = `<span class="rank-badge rank-1" title="Top 1 耗时排名">🥇</span>`;
+      else if (rank === 2) rankHtml = `<span class="rank-badge rank-2" title="Top 2 耗时排名">🥈</span>`;
+      else if (rank === 3) rankHtml = `<span class="rank-badge rank-3" title="Top 3 耗时排名">🥉</span>`;
+      else rankHtml = `<span class="rank-badge rank-normal">${rank}</span>`;
+
       const pct = totalMs > 0 ? ((item.timeSpent / totalMs) * 100).toFixed(1) : '0';
       const durationStr = this.formatDuration(item.timeSpent);
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${item.domain}&sz=32`;
@@ -1353,8 +1360,12 @@ class PopupManager {
       const catClass = item.category === 'academic' ? 'cat-academic' : '';
       const safeDomain = this.escapeHtml(item.domain);
 
+      const tags = this.settings.siteTags?.[item.domain] || [];
+      const tagsHtml = tags.map(t => `<span class="cat-badge" style="background: rgba(168,85,247,0.15); color: #a855f7;">${this.escapeHtml(t)}</span>`).join('');
+
       return `
         <div class="website-item" data-domain-detail="${item.domain}">
+          ${rankHtml}
           <div class="site-icon-wrapper">
             <img src="${faviconUrl}" alt="${safeDomain}" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
             <span style="display:none">${initialLetter}</span>
@@ -1374,7 +1385,10 @@ class PopupManager {
             </div>
 
             <div class="site-meta-row">
-              <span class="cat-badge ${catClass}">${catLabels[item.category] || '网页'}</span>
+              <div style="display:flex; gap:4px; align-items:center; min-width:0; flex:1;">
+                <span class="cat-badge ${catClass}">${catLabels[item.category] || '网页'}</span>
+                ${tagsHtml}
+              </div>
               <span>占比 ${pct}% • 访问 ${item.visits || 1}次</span>
             </div>
           </div>
@@ -2254,19 +2268,19 @@ class PopupManager {
     try {
       chrome.runtime.sendMessage({ type: 'GET_TRACKER_STATUS' }, (res) => {
         if (chrome.runtime.lastError || !res || !res.success) {
-          this.elements.trackerStatusBadge.textContent = '🟢 监测中';
-          this.elements.trackerStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+          this.elements.trackerStatusBadge.innerHTML = '<span class="status-dot"></span> 监测中';
+          this.elements.trackerStatusBadge.style.background = 'rgba(16, 185, 129, 0.14)';
           this.elements.trackerStatusBadge.style.color = '#10b981';
           return;
         }
         if (res.isUserActive) {
           const domainStr = res.activeDomain ? ` (${res.activeDomain})` : '';
-          this.elements.trackerStatusBadge.textContent = `🟢 监测中${domainStr}`;
-          this.elements.trackerStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+          this.elements.trackerStatusBadge.innerHTML = `<span class="status-dot"></span> 监测中${this.escapeHtml(domainStr)}`;
+          this.elements.trackerStatusBadge.style.background = 'rgba(16, 185, 129, 0.14)';
           this.elements.trackerStatusBadge.style.color = '#10b981';
           this.elements.trackerStatusBadge.title = `系统实时监测中: ${res.activeDomain || '活跃前台标签页'}`;
         } else {
-          this.elements.trackerStatusBadge.textContent = '⏸️ 待机挂起';
+          this.elements.trackerStatusBadge.innerHTML = '<span>⏸️</span> 待机挂起';
           this.elements.trackerStatusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
           this.elements.trackerStatusBadge.style.color = '#f59e0b';
           this.elements.trackerStatusBadge.title = '当前无前台交互或处于后台待机，计时暂停';
