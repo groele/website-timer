@@ -149,6 +149,7 @@ class PopupManager {
       detailNoteInput: document.getElementById('detailNoteInput'),
       saveDetailNoteBtn: document.getElementById('saveDetailNoteBtn'),
       detailCategorySelect: document.getElementById('detailCategorySelect'),
+      exportSingleDomainCsvBtn: document.getElementById('exportSingleDomainCsvBtn'),
       pomoBlockDistractToggle: document.getElementById('pomoBlockDistractToggle'),
 
       weeklyGoalProgressText: document.getElementById('weeklyGoalProgressText'),
@@ -363,6 +364,11 @@ class PopupManager {
     this.elements.closeDetailModal.addEventListener('click', () => {
       this.elements.domainDetailModal.style.display = 'none';
     });
+    if (this.elements.exportSingleDomainCsvBtn) {
+      this.elements.exportSingleDomainCsvBtn.addEventListener('click', () => {
+        this.exportSingleDomainCSV();
+      });
+    }
     this.elements.domainDetailModal.addEventListener('click', (e) => {
       if (e.target === this.elements.domainDetailModal) {
         this.elements.domainDetailModal.style.display = 'none';
@@ -1788,6 +1794,36 @@ class PopupManager {
     } catch (e) {
       this.showToast('CSV 导出失败', 'error');
     }
+  }
+
+  exportSingleDomainCSV() {
+    const domain = this.currentInspectingDomain;
+    if (!domain) return;
+
+    let csv = "\uFEFF日期,域名,浏览时长(分钟),停留秒数,访问次数\n";
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      last7Days.push(this.getDateKeyOffset(i));
+    }
+
+    last7Days.forEach(dKey => {
+      const dayData = this.rawData[dKey] || {};
+      const item = dayData[domain] || {};
+      const ms = item.timeSpent || 0;
+      const mins = (ms / 60000).toFixed(1);
+      const secs = Math.round(ms / 1000);
+      const visits = item.visits || 0;
+      csv += `"${dKey}","${domain}",${mins},${secs},${visits}\n`;
+    });
+
+    const encodedUri = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `website-timer-${domain}-7day-report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    this.showToast(`单站 ${domain} 7天历史 CSV 报表导出成功！`, 'success');
   }
 
   exportMarkdownReport() {
