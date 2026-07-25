@@ -457,8 +457,67 @@ class PopupManager {
     await chrome.storage.local.set({ timer_settings: this.settings });
   }
 
+  async sanitizeAndSeparateHistoricalData() {
+    try {
+      const res = await chrome.storage.local.get(null);
+      const updates = {};
+      let hasChanges = false;
+
+      Object.keys(res).forEach(k => {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k)) {
+          const dayData = res[k];
+          if (dayData && Array.isArray(dayData._timeline)) {
+            const validTimeline = [];
+            dayData._timeline.forEach(ev => {
+              if (ev.timestamp) {
+                const actualDateKey = this.formatTimestampDate(ev.timestamp);
+                if (actualDateKey !== k) {
+                  hasChanges = true;
+                  if (!updates[actualDateKey]) {
+                    updates[actualDateKey] = res[actualDateKey] || {};
+                  }
+                  if (!updates[actualDateKey][ev.domain]) {
+                    updates[actualDateKey][ev.domain] = {
+                      timeSpent: 0,
+                      lastTitle: ev.title || ev.domain,
+                      visits: 1,
+                      category: ev.category || 'other',
+                      hourlyUsage: new Array(24).fill(0)
+                    };
+                  }
+                  const hour = new Date(ev.timestamp).getHours();
+                  updates[actualDateKey][ev.domain].timeSpent += (ev.durationMs || 0);
+                  updates[actualDateKey][ev.domain].hourlyUsage[hour] += (ev.durationMs || 0);
+
+                  if (!Array.isArray(updates[actualDateKey]._timeline)) {
+                    updates[actualDateKey]._timeline = [];
+                  }
+                  updates[actualDateKey]._timeline.push(ev);
+                } else {
+                  validTimeline.push(ev);
+                }
+              } else {
+                validTimeline.push(ev);
+              }
+            });
+
+            if (hasChanges) {
+              dayData._timeline = validTimeline;
+              updates[k] = dayData;
+            }
+          }
+        }
+      });
+
+      if (hasChanges) {
+        await chrome.storage.local.set(updates);
+      }
+    } catch (e) {}
+  }
+
   async loadAllData() {
     try {
+      await this.sanitizeAndSeparateHistoricalData();
       const res = await chrome.storage.local.get(null);
       const raw = {};
       Object.keys(res).forEach(k => {
@@ -1347,9 +1406,9 @@ class PopupManager {
     const barW = 24;
 
     historyMs.forEach((item, index) => {
-      const barH = Math.max(2, (item.spent / maxMs) * (height - 20));
+      const barH = Math.max(2, (item.spent / maxMs) * (height - 24));
       const x = index * 38 + 10;
-      const y = height - 15 - barH;
+      const y = height - 18 - barH;
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('x', x);
@@ -1357,13 +1416,23 @@ class PopupManager {
       rect.setAttribute('width', barW);
       rect.setAttribute('height', barH);
       rect.setAttribute('rx', '3');
-      rect.setAttribute('fill', 'var(--primary)');
+      rect.setAttribute('fill', item.dKey === this.getTodayKey() ? '#8b5cf6' : 'var(--primary)');
 
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       title.textContent = `${item.dKey}: ${this.formatDuration(item.spent)}`;
       rect.appendChild(title);
-
       svg.appendChild(rect);
+
+      // 标注清晰日期字样 (如 "今日", "07-24")
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      const dateShort = item.dKey.slice(5);
+      text.setAttribute('x', x + barW / 2);
+      text.setAttribute('y', height - 2);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('font-size', '9');
+      text.setAttribute('fill', 'var(--text-secondary, rgba(255,255,255,0.7))');
+      text.textContent = (item.dKey === this.getTodayKey()) ? '今日' : dateShort;
+      svg.appendChild(text);
     });
 
     this.elements.domainDetailModal.style.display = 'flex';
