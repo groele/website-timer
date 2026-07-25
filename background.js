@@ -341,6 +341,14 @@ class WebsiteTimer {
     const timeSpent = now - startTime;
     const minThreshold = this.settings.minTimeThreshold || 5000;
 
+    // 🛡️ 强制防离线防休眠心跳保护：
+    // 如果两次统计记录之间跨度超过 2 分钟 (120,000 ms)，说明中间电脑处于睡眠/关屏/后台挂起状态，
+    // 必须直接丢弃该段空转虚假时长，并将时间基准点重置为当前，防止将过夜休眠误算为网站使用时长！
+    if (timeSpent > 120000) {
+      this.lastActiveTime = now;
+      return;
+    }
+
     if (timeSpent < minThreshold) {
       return;
     }
