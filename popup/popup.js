@@ -94,7 +94,14 @@ class PopupManager {
       pomoTimerDisplay: document.getElementById('pomoTimerDisplay'),
       pomoStatusText: document.getElementById('pomoStatusText'),
       pomoStartBtn: document.getElementById('pomoStartBtn'),
+      pomoFullscreenBtn: document.getElementById('pomoFullscreenBtn'),
       pomoResetBtn: document.getElementById('pomoResetBtn'),
+      pomoFocusOverlay: document.getElementById('pomoFocusOverlay'),
+      closeFocusOverlay: document.getElementById('closeFocusOverlay'),
+      overlayTimerDisplay: document.getElementById('overlayTimerDisplay'),
+      overlayStatusText: document.getElementById('overlayStatusText'),
+      overlayStartBtn: document.getElementById('overlayStartBtn'),
+      overlayResetBtn: document.getElementById('overlayResetBtn'),
       streakDaysVal: document.getElementById('streakDaysVal'),
       achievementBadges: document.getElementById('achievementBadges'),
 
@@ -301,7 +308,27 @@ class PopupManager {
         const val = parseInt(e.target.value, 10);
         this.updateSetting('weeklyAcademicGoalHours', val);
         this.renderStatsTab();
-        this.showToast(`本周科研目标更新为: ${val} 小时`, 'success');
+        this.showToast(`周学术科研目标调整为: ${val} 小时`, 'success');
+      });
+    }
+    if (this.elements.pomoFullscreenBtn) {
+      this.elements.pomoFullscreenBtn.addEventListener('click', () => {
+        if (this.elements.pomoFocusOverlay) this.elements.pomoFocusOverlay.style.display = 'flex';
+      });
+    }
+    if (this.elements.closeFocusOverlay) {
+      this.elements.closeFocusOverlay.addEventListener('click', () => {
+        if (this.elements.pomoFocusOverlay) this.elements.pomoFocusOverlay.style.display = 'none';
+      });
+    }
+    if (this.elements.overlayStartBtn) {
+      this.elements.overlayStartBtn.addEventListener('click', () => {
+        this.togglePomodoro();
+      });
+    }
+    if (this.elements.overlayResetBtn) {
+      this.elements.overlayResetBtn.addEventListener('click', () => {
+        this.resetPomodoro();
       });
     }
     this.elements.importDataBtn.addEventListener('click', () => this.elements.importFileInput.click());
@@ -915,10 +942,18 @@ class PopupManager {
   }
 
   drawHourlyChart(svg, aggregatedDomains) {
-    const hourlyArr = new Array(24).fill(0);
+    const totalHourly = new Array(24).fill(0);
+    const academicHourly = new Array(24).fill(0);
+
     Object.values(aggregatedDomains).forEach(d => {
       if (d.hourlyUsage) {
-        for (let h = 0; h < 24; h++) hourlyArr[h] += (d.hourlyUsage[h] || 0);
+        for (let h = 0; h < 24; h++) {
+          const spent = d.hourlyUsage[h] || 0;
+          totalHourly[h] += spent;
+          if (d.category === 'academic') {
+            academicHourly[h] += spent;
+          }
+        }
       }
     });
 
@@ -926,28 +961,60 @@ class PopupManager {
     const height = 120;
     const padding = 20;
     let maxMs = 1;
-    hourlyArr.forEach(v => { if (v > maxMs) maxMs = v; });
+    totalHourly.forEach(v => { if (v > maxMs) maxMs = v; });
 
-    hourlyArr.forEach((valMs, hour) => {
-      const mins = valMs / 60000;
-      const barHeight = Math.max(2, (valMs / maxMs) * (height - padding * 2));
+    const barW = Math.floor((width - padding * 2) / 24) - 2;
+
+    totalHourly.forEach((valMs, hour) => {
+      const acadMs = academicHourly[hour];
+      const otherMs = Math.max(0, valMs - acadMs);
+
+      const totalH = Math.max(2, (valMs / maxMs) * (height - padding * 2));
+      const acadH = (acadMs / maxMs) * (height - padding * 2);
+      const otherH = totalH - acadH;
+
       const x = padding + hour * ((width - padding * 2) / 24) + 1;
-      const y = height - padding - barHeight;
+      const yOther = height - padding - otherH;
+      const yAcad = yOther - acadH;
 
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', x);
-      rect.setAttribute('y', y);
-      rect.setAttribute('width', Math.floor((width - padding * 2) / 24) - 2);
-      rect.setAttribute('height', barHeight);
-      rect.setAttribute('rx', '2');
-      rect.setAttribute('fill', 'var(--primary)');
-      rect.setAttribute('opacity', '0.85');
+      if (otherH > 0) {
+        const rectOther = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rectOther.setAttribute('x', x);
+        rectOther.setAttribute('y', yOther);
+        rectOther.setAttribute('width', barW);
+        rectOther.setAttribute('height', Math.max(1, otherH));
+        rectOther.setAttribute('rx', '1');
+        rectOther.setAttribute('fill', 'var(--primary)');
+        rectOther.setAttribute('opacity', '0.75');
+        svg.appendChild(rectOther);
+      }
+
+      if (acadH > 0) {
+        const rectAcad = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rectAcad.setAttribute('x', x);
+        rectAcad.setAttribute('y', yAcad);
+        rectAcad.setAttribute('width', barW);
+        rectAcad.setAttribute('height', Math.max(1, acadH));
+        rectAcad.setAttribute('rx', '1');
+        rectAcad.setAttribute('fill', '#8b5cf6');
+        rectAcad.setAttribute('opacity', '0.95');
+        svg.appendChild(rectAcad);
+      }
+
+      const hitRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      hitRect.setAttribute('x', x);
+      hitRect.setAttribute('y', height - padding - totalH);
+      hitRect.setAttribute('width', barW);
+      hitRect.setAttribute('height', Math.max(2, totalH));
+      hitRect.setAttribute('fill', 'transparent');
 
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-      title.textContent = `${hour}:00 - ${hour+1}:00 : ${Math.round(mins)}分钟`;
-      rect.appendChild(title);
+      const totalMins = Math.round(valMs / 60000);
+      const acadMins = Math.round(acadMs / 60000);
+      title.textContent = `${hour}:00 - ${hour+1}:00 : 🎓科研 ${acadMins}m / 总计 ${totalMins}m`;
+      hitRect.appendChild(title);
 
-      svg.appendChild(rect);
+      svg.appendChild(hitRect);
     });
   }
 
