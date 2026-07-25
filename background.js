@@ -364,12 +364,7 @@ class WebsiteTimer {
       return;
     }
 
-    if (this.isSaving) {
-      return;
-    }
-
     this.lastActiveTime = now;
-    this.isSaving = true;
 
     return this.runInStorageQueue(async () => {
       try {
@@ -739,6 +734,12 @@ class WebsiteTimer {
       endTime: null
     };
     await chrome.storage.local.set({ pomodoro_state: this.pomodoro });
+  }
+
+  async forceSave() {
+    if (this.activeTabInfo && this.lastActiveTime && this.isUserActive) {
+      await this.saveTimeSpent();
+    }
   }
 
   checkDailyRollover() {
