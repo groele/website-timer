@@ -8,6 +8,7 @@ class PopupManager {
     this.currentChart = 'trend';
     this.currentView = 'list'; // 'list' | 'timeline'
     this.searchQuery = '';
+    this.selectedTag = 'all';
     
     this.rawData = {};
     this.settings = {};
@@ -140,9 +141,14 @@ class PopupManager {
       refreshDataBtn: document.getElementById('refreshDataBtn'),
       toastContainer: document.getElementById('toastContainer'),
       
+      trackerStatusBadge: document.getElementById('trackerStatusBadge'),
+      detailTimelineList: document.getElementById('detailTimelineList'),
+      
       domainDetailModal: document.getElementById('domainDetailModal'),
       closeDetailModal: document.getElementById('closeDetailModal'),
       detailDomainName: document.getElementById('detailDomainName'),
+      openDomainUrlBtn: document.getElementById('openDomainUrlBtn'),
+      resetSingleDomainBtn: document.getElementById('resetSingleDomainBtn'),
       detailTotalTime: document.getElementById('detailTotalTime'),
       detailVisits: document.getElementById('detailVisits'),
       detailAvgSession: document.getElementById('detailAvgSession'),
@@ -304,6 +310,8 @@ class PopupManager {
     if (this.elements.saveDetailNoteBtn) {
       this.elements.saveDetailNoteBtn.addEventListener('click', () => this.saveSiteNote());
     }
+    this.updateTrackerStatusBadge();
+    setInterval(() => this.updateTrackerStatusBadge(), 5000);
     if (this.elements.pomoBlockDistractToggle) {
       this.elements.pomoBlockDistractToggle.addEventListener('change', (e) => {
         this.updateSetting('pomoBlockDistract', e.target.checked);
@@ -368,6 +376,37 @@ class PopupManager {
     this.elements.closeDetailModal.addEventListener('click', () => {
       this.elements.domainDetailModal.style.display = 'none';
     });
+    if (this.elements.openDomainUrlBtn) {
+      this.elements.openDomainUrlBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const domain = this.currentInspectingDomain;
+        if (domain) {
+          const url = domain.startsWith('http') ? domain : 'https://' + domain;
+          chrome.tabs.create({ url: url });
+        }
+      });
+    }
+    if (this.elements.detailDomainName) {
+      this.elements.detailDomainName.addEventListener('click', () => {
+        const domain = this.currentInspectingDomain;
+        if (domain) {
+          const url = domain.startsWith('http') ? domain : 'https://' + domain;
+          chrome.tabs.create({ url: url });
+        }
+      });
+    }
+    if (this.elements.resetSingleDomainBtn) {
+      this.elements.resetSingleDomainBtn.addEventListener('click', () => {
+        const domain = this.currentInspectingDomain;
+        if (domain) {
+          this.showConfirmModal(
+            `重置 ${domain} 历史数据`,
+            `确定要彻底清空 ${domain} 的所有统计数据与浏览记录吗？此操作不可撤销。`,
+            () => this.resetSingleDomainData(domain)
+          );
+        }
+      });
+    }
     if (this.elements.exportSingleDomainCsvBtn) {
       this.elements.exportSingleDomainCsvBtn.addEventListener('click', () => {
         this.exportSingleDomainCSV();
@@ -962,10 +1001,62 @@ class PopupManager {
     } else if (this.currentChart === 'category') {
       this.elements.chartTitle.textContent = '网站类型使用占比';
       this.drawCategoryChart(svg, aggregatedDomains);
+    } else if (this.currentChart === 'tag') {
+      this.elements.chartTitle.textContent = '🏷️ 课题标签耗时分布';
+      this.drawTagChart(svg, aggregatedDomains);
     } else if (this.currentChart === 'donut') {
       this.elements.chartTitle.textContent = '网站分类矢量环形图';
       this.drawDonutChart(svg, aggregatedDomains);
     }
+  }
+
+  drawTagChart(svg, aggregatedDomains) {
+    const tagMsMap = {};
+    let totalMs = 0;
+
+    Object.values(aggregatedDomains).forEach(d => {
+      const tags = this.settings.siteTags?.[d.domain] || this.getSuggestedTags(d.domain);
+      if (Array.isArray(tags) && tags.length > 0) {
+        tags.forEach(t => {
+          tagMsMap[t] = (tagMsMap[t] || 0) + d.timeSpent;
+        });
+      } else {
+        tagMsMap['#未打标签'] = (tagMsMap['#未打标签'] || 0) + d.timeSpent;
+      }
+      totalMs += d.timeSpent;
+    });
+
+    const entries = Object.entries(tagMsMap);
+    if (entries.length === 0 || totalMs === 0) return;
+
+    entries.sort((a, b) => b[1] - a[1]);
+
+    const tagColors = ['#a855f7', '#38bdf8', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#94a3b8'];
+    let currentY = 5;
+
+    entries.slice(0, 7).forEach(([tag, ms], idx) => {
+      const pct = (ms / totalMs) * 100;
+      const color = tagColors[idx % tagColors.length];
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', '10');
+      text.setAttribute('y', currentY + 10);
+      text.setAttribute('font-size', '10');
+      text.setAttribute('fill', 'var(--text-main)');
+      text.textContent = `${tag} (${pct.toFixed(1)}%)`;
+      svg.appendChild(text);
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', '140');
+      rect.setAttribute('y', currentY + 2);
+      rect.setAttribute('width', Math.max(3, pct * 2.0).toFixed(1));
+      rect.setAttribute('height', '10');
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('fill', color);
+      svg.appendChild(rect);
+
+      currentY += 16;
+    });
   }
 
   drawTrendChart(svg, periodData) {
@@ -1271,7 +1362,10 @@ class PopupManager {
 
           <div class="site-body">
             <div class="site-title-row">
-              <span class="site-name-text truncate" title="${safeDomain}">${safeDomain}</span>
+              <div style="display:flex; align-items:center; gap:4px; min-width:0; flex:1;">
+                <span class="site-name-text truncate" title="${safeDomain}">${safeDomain}</span>
+                <a href="https://${safeDomain}" target="_blank" class="site-direct-link" title="在新标签页中打开 ${safeDomain}" onclick="event.stopPropagation(); chrome.tabs.create({ url: 'https://${safeDomain}' }); return false;">↗</a>
+              </div>
               <span class="site-time-text">${durationStr}</span>
             </div>
             
@@ -1332,6 +1426,9 @@ class PopupManager {
 
     this.currentInspectingDomain = domain;
     this.elements.detailDomainName.textContent = domain;
+    if (this.elements.openDomainUrlBtn) {
+      this.elements.openDomainUrlBtn.href = domain.startsWith('http') ? domain : 'https://' + domain;
+    }
     this.elements.detailTotalTime.textContent = this.formatDuration(data.timeSpent);
     this.elements.detailVisits.textContent = `${data.visits || 1} 次`;
 
@@ -1403,6 +1500,7 @@ class PopupManager {
       svg.appendChild(text);
     });
 
+    this.renderDetailTimeline(domain);
     this.elements.domainDetailModal.style.display = 'flex';
   }
 
@@ -1420,6 +1518,30 @@ class PopupManager {
     }
     this.updateSetting('siteNotes', this.settings.siteNotes);
     this.showToast(`已保存 ${domain} 的科研备注`, 'success');
+  }
+
+  async resetSingleDomainData(domain) {
+    if (!domain) return;
+    try {
+      const res = await chrome.storage.local.get(null);
+      const updates = {};
+      Object.keys(res).forEach(k => {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k)) {
+          const dayObj = res[k];
+          if (dayObj && typeof dayObj === 'object' && dayObj[domain]) {
+            const cleanObj = { ...dayObj };
+            delete cleanObj[domain];
+            updates[k] = cleanObj;
+          }
+        }
+      });
+      await chrome.storage.local.set(updates);
+      this.elements.domainDetailModal.style.display = 'none';
+      await this.loadAllData();
+      this.showToast(`已成功重置 ${domain} 的所有历史数据！`, 'success');
+    } catch (e) {
+      this.showToast('重置单站数据失败', 'error');
+    }
   }
 
   formatDuration(milliseconds) {
@@ -1765,16 +1887,18 @@ class PopupManager {
       const domainList = Object.values(aggregatedDomains);
 
       if (domainList.length === 0) {
-        this.showToast('暂无数据可导出为 CSV', 'error');
+        this.showToast('暂无可导出的数据', 'error');
         return;
       }
+
+      domainList.sort((a, b) => b.timeSpent - a.timeSpent);
 
       const catLabels = {
         academic: '学术科研', work: '工作学习', social: '社交通讯', video: '视频娱乐',
         shopping: '购物消费', news: '新闻资讯', other: '其他网页'
       };
 
-      let csvContent = "\uFEFF域名,最后页面标题,分类,使用时长(分钟),总秒数,访问次数,单次平均停留(秒)\n";
+      let csvContent = "\uFEFF域名,网页标题,分类,浏览时长(分钟),停留秒数,访问次数,平均停留(秒)\n";
 
       domainList.forEach(item => {
         const title = (item.lastTitle || item.domain).replace(/"/g, '""');
@@ -2123,6 +2247,80 @@ class PopupManager {
     setInterval(() => {
       this.loadAllData();
     }, 10000);
+  }
+
+  updateTrackerStatusBadge() {
+    if (!this.elements.trackerStatusBadge) return;
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_TRACKER_STATUS' }, (res) => {
+        if (chrome.runtime.lastError || !res || !res.success) {
+          this.elements.trackerStatusBadge.textContent = '🟢 监测中';
+          this.elements.trackerStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+          this.elements.trackerStatusBadge.style.color = '#10b981';
+          return;
+        }
+        if (res.isUserActive) {
+          const domainStr = res.activeDomain ? ` (${res.activeDomain})` : '';
+          this.elements.trackerStatusBadge.textContent = `🟢 监测中${domainStr}`;
+          this.elements.trackerStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+          this.elements.trackerStatusBadge.style.color = '#10b981';
+          this.elements.trackerStatusBadge.title = `系统实时监测中: ${res.activeDomain || '活跃前台标签页'}`;
+        } else {
+          this.elements.trackerStatusBadge.textContent = '⏸️ 待机挂起';
+          this.elements.trackerStatusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+          this.elements.trackerStatusBadge.style.color = '#f59e0b';
+          this.elements.trackerStatusBadge.title = '当前无前台交互或处于后台待机，计时暂停';
+        }
+      });
+    } catch (e) {
+      // fallback
+    }
+  }
+
+  renderDetailTimeline(domain) {
+    const listContainer = this.elements.detailTimelineList || document.getElementById('detailTimelineList');
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+
+    const todayData = this.rawData[this.getTodayKey()] || {};
+    const timeline = todayData._timeline || [];
+    const domainEvents = timeline.filter(item => item && item.domain === domain);
+
+    if (domainEvents.length === 0) {
+      listContainer.innerHTML = '<div style="color: var(--text-muted); font-style: italic; text-align: center; padding: 6px 0;">今日暂无会话细节片段时间线</div>';
+      return;
+    }
+
+    const sorted = [...domainEvents].reverse();
+    sorted.forEach(evt => {
+      const itemEl = document.createElement('div');
+      itemEl.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+        gap: 8px;
+      `;
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'truncate';
+      titleSpan.style.flex = '1';
+      titleSpan.style.color = 'var(--text-main)';
+      titleSpan.title = evt.title || domain;
+      titleSpan.textContent = `${evt.time || ''} - ${evt.title || domain}`;
+
+      const durationSpan = document.createElement('span');
+      durationSpan.style.color = 'var(--primary)';
+      durationSpan.style.fontWeight = '600';
+      durationSpan.style.whiteSpace = 'nowrap';
+      durationSpan.textContent = this.formatDuration(evt.durationMs || 0);
+
+      itemEl.appendChild(titleSpan);
+      itemEl.appendChild(durationSpan);
+      listContainer.appendChild(itemEl);
+    });
   }
 }
 

@@ -4,8 +4,9 @@ class WebsiteTimer {
   constructor() {
     this.activeTabInfo = null;
     this.lastActiveTime = null;
+    this.lastHeartbeatTime = null;
     this.continuousActiveTime = 0;
-    this.isUserActive = true;
+    this.isUserActive = false;
     this.isSaving = false;
     this.currentDay = this.getTodayKey();
     this.storageQueue = Promise.resolve();
@@ -190,7 +191,7 @@ class WebsiteTimer {
       this.handleIdleStateChange(state);
     });
 
-    chrome.idle.setDetectionInterval(15);
+    chrome.idle.setDetectionInterval(60);
 
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes.timer_settings) {
@@ -216,6 +217,7 @@ class WebsiteTimer {
             this.activeTabInfo.title = message.data.title;
           }
           if (message.data.isActive) {
+            this.lastHeartbeatTime = Date.now();
             if (!this.isUserActive) {
               this.isUserActive = true;
               this.lastActiveTime = Date.now();
@@ -225,10 +227,19 @@ class WebsiteTimer {
               this.saveTimeSpent();
               this.isUserActive = false;
               this.lastActiveTime = null;
+              this.lastHeartbeatTime = null;
             }
           }
         }
         sendResponse({ success: true });
+      } else if (message.type === 'GET_TRACKER_STATUS') {
+        sendResponse({
+          success: true,
+          isUserActive: this.isUserActive,
+          lastHeartbeatTime: this.lastHeartbeatTime,
+          activeDomain: this.activeTabInfo?.domain || null
+        });
+        return true;
       } else if (message.type === 'POMODORO_SET_PRESET') {
         this.setPomodoroPreset(message.mins).then(() => sendResponse({ success: true }));
         return true;
@@ -349,6 +360,14 @@ class WebsiteTimer {
 
   async saveTimeSpent() {
     if (!this.activeTabInfo || !this.lastActiveTime || this.settings.isPaused) {
+      return;
+    }
+
+    // 🛡️ 心跳保护：如果距离上一次页面活跃心跳超过 45 秒，说明用户停止了交互或离开电脑，直接终止本次挂线计时
+    if (this.lastHeartbeatTime && (Date.now() - this.lastHeartbeatTime > 45000)) {
+      this.isUserActive = false;
+      this.lastActiveTime = null;
+      this.lastHeartbeatTime = null;
       return;
     }
 
@@ -503,7 +522,7 @@ class WebsiteTimer {
           };
         } else {
           const timeSinceLastVisit = Date.now() - (todayData[domain].lastVisitTime || 0);
-          if (timeSinceLastVisit > 30000) {
+          if (timeSinceLastVisit > 300000) {
             todayData[domain].visits = (todayData[domain].visits || 0) + 1;
             todayData[domain].lastVisitTime = Date.now();
           }

@@ -12,24 +12,30 @@
   <div class="app-container">
     <!-- 顶栏与导航 -->
     <header class="app-header">
-      <div class="brand">
-        <span class="brand-icon">⏱️</span>
-        <span class="brand-name">网页计时器 (博士科研版)</span>
+      <div class="header-main-bar">
+        <div class="brand">
+          <span class="brand-icon">⏱️</span>
+          <span class="brand-title">网页计时器</span>
+          <span class="brand-tag">博士科研版</span>
+        </div>
+        <div id="trackerStatusBadge" class="tracker-status-badge" title="系统实时心跳监测状态">🟢 监测中</div>
       </div>
 
-      <div class="nav-tabs">
-        <button class="nav-btn active" data-tab="statsTab">
-          <span class="tab-icon">📊</span>
-          <span class="tab-label">统计</span>
-        </button>
-        <button class="nav-btn" data-tab="limitsTab">
-          <span class="tab-icon">🎯</span>
-          <span class="tab-label">专注&限制</span>
-        </button>
-        <button class="nav-btn" data-tab="settingsTab">
-          <span class="tab-icon">⚙️</span>
-          <span class="tab-label">设置</span>
-        </button>
+      <div class="header-nav-bar">
+        <div class="nav-tabs">
+          <button class="nav-btn active" data-tab="statsTab">
+            <span class="tab-icon">📊</span>
+            <span class="tab-label">统计分析</span>
+          </button>
+          <button class="nav-btn" data-tab="limitsTab">
+            <span class="tab-icon">🎯</span>
+            <span class="tab-label">专注与限制</span>
+          </button>
+          <button class="nav-btn" data-tab="settingsTab">
+            <span class="tab-icon">⚙️</span>
+            <span class="tab-label">全局设置</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -118,6 +124,7 @@
               <button class="chart-btn active" data-chart="trend">趋势</button>
               <button class="chart-btn" data-chart="hourly">24h分布</button>
               <button class="chart-btn" data-chart="category">分类</button>
+              <button class="chart-btn" data-chart="tag">🏷️标签</button>
               <button class="chart-btn" data-chart="donut">🍩环形</button>
             </div>
           </div>
@@ -508,7 +515,13 @@
   <div id="domainDetailModal" class="modal-overlay" style="display: none;">
     <div class="modal-card detail-modal-card">
       <div class="modal-header">
-        <h3 id="detailDomainName">domain.com</h3>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <h3 id="detailDomainName" style="cursor: pointer; transition: color 0.2s;" title="点击在新标签页中打开网页">domain.com</h3>
+          <a id="openDomainUrlBtn" href="#" target="_blank" class="detail-domain-link" title="在新标签页中打开网页" style="color: var(--primary, #10b981); font-size: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(16, 185, 129, 0.15); border-radius: 6px; transition: all 0.2s ease;">
+            <span>🔗 打开网页</span>
+            <span style="font-size: 11px;">↗</span>
+          </a>
+        </div>
         <button id="closeDetailModal" class="icon-btn">✕</button>
       </div>
       <div class="detail-body">
@@ -544,6 +557,10 @@
           <div class="detail-chart-title">近7天每日浏览趋势</div>
           <svg id="detailChartSvg" viewBox="0 0 280 80"></svg>
         </div>
+        <div id="detailTimelineBox" class="detail-timeline-box" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.1));">
+          <div class="detail-chart-title" style="margin-bottom: 6px;">📜 今日访问会话记录 (时间段下钻)</div>
+          <div id="detailTimelineList" style="max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: 11px;"></div>
+        </div>
         <div class="detail-note-box"
           style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.1));">
           <div class="detail-chart-title" style="margin-bottom: 6px;">📝 网站科研备注 / 课题笔记</div>
@@ -551,9 +568,9 @@
             <input type="text" id="detailNoteInput" placeholder="记录如：arXiv论文研读/项目代码库..." style="flex:1;">
             <button id="saveDetailNoteBtn" class="btn btn-primary btn-sm">保存</button>
           </div>
-          <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
-            <button id="exportSingleDomainCsvBtn" class="btn btn-secondary btn-sm" style="font-size: 11px;">📥 导出该站点 7
-              天趋势 CSV</button>
+          <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <button id="resetSingleDomainBtn" class="btn btn-secondary btn-sm" style="font-size: 11px; color: #ef4444; border-color: rgba(239,68,68,0.3);" title="重置该网站的浏览时长与访问次数记录">🗑️ 重置该站数据</button>
+            <button id="exportSingleDomainCsvBtn" class="btn btn-secondary btn-sm" style="font-size: 11px;">📥 导出该站点 7 天趋势 CSV</button>
           </div>
         </div>
       </div>
