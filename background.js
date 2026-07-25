@@ -484,35 +484,37 @@ class WebsiteTimer {
   async recordVisit(domain, title) {
     if (this.isBlacklisted(domain) || this.settings.isPaused) return;
 
-    const today = this.getTodayKey();
-    try {
-      const result = await chrome.storage.local.get([today]);
-      const todayData = (result && typeof result[today] === 'object' && result[today] !== null)
-        ? result[today]
-        : {};
+    return this.runInStorageQueue(async () => {
+      const today = this.getTodayKey();
+      try {
+        const result = await chrome.storage.local.get([today]);
+        const todayData = (result && typeof result[today] === 'object' && result[today] !== null)
+          ? result[today]
+          : {};
 
-      if (!todayData[domain] || typeof todayData[domain] !== 'object') {
-        todayData[domain] = {
-          timeSpent: 0,
-          lastTitle: title || domain,
-          visits: 1,
-          lastVisitTime: Date.now(),
-          category: this.getDomainCategory(domain),
-          hourlyUsage: new Array(24).fill(0)
-        };
-      } else {
-        const timeSinceLastVisit = Date.now() - (todayData[domain].lastVisitTime || 0);
-        if (timeSinceLastVisit > 30000) {
-          todayData[domain].visits = (todayData[domain].visits || 0) + 1;
-          todayData[domain].lastVisitTime = Date.now();
+        if (!todayData[domain] || typeof todayData[domain] !== 'object') {
+          todayData[domain] = {
+            timeSpent: 0,
+            lastTitle: title || domain,
+            visits: 1,
+            lastVisitTime: Date.now(),
+            category: this.getDomainCategory(domain),
+            hourlyUsage: new Array(24).fill(0)
+          };
+        } else {
+          const timeSinceLastVisit = Date.now() - (todayData[domain].lastVisitTime || 0);
+          if (timeSinceLastVisit > 30000) {
+            todayData[domain].visits = (todayData[domain].visits || 0) + 1;
+            todayData[domain].lastVisitTime = Date.now();
+          }
+          todayData[domain].lastTitle = title || domain;
         }
-        todayData[domain].lastTitle = title || domain;
-      }
 
-      await chrome.storage.local.set({ [today]: todayData });
-    } catch (error) {
-      console.error('记录访问失败:', error);
-    }
+        await chrome.storage.local.set({ [today]: todayData });
+      } catch (error) {
+        console.error('记录访问失败:', error);
+      }
+    });
   }
 
   checkLimits(domain, todayData) {
