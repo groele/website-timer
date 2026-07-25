@@ -314,7 +314,11 @@ class PopupManager {
     }
     if (this.elements.pomoFullscreenBtn) {
       this.elements.pomoFullscreenBtn.addEventListener('click', () => {
-        chrome.tabs.create({ url: 'focus.html' });
+        chrome.windows.create({
+          url: 'focus.html',
+          type: 'popup',
+          state: 'fullscreen'
+        });
       });
     }
     if (this.elements.closeFocusOverlay) {

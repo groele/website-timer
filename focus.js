@@ -26,9 +26,6 @@ class FocusPageManager {
     await this.loadPomodoroState();
     this.startUiTimer();
     this.randomizeQuote();
-
-    // 自动请求进入全屏模式
-    this.requestBrowserFullscreen();
   }
 
   bindDOM() {
