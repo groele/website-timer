@@ -38,8 +38,10 @@ class FocusPageManager {
       resetBtn: document.getElementById('focusResetBtn'),
       exitBtn: document.getElementById('exitBtn'),
       toggleFullscreenBtn: document.getElementById('toggleFullscreenBtn'),
-      presetBtns: document.querySelectorAll('.preset-btn')
+      presetBtns: document.querySelectorAll('.preset-btn'),
+      soundBtns: document.querySelectorAll('.sound-btn')
     };
+    this.ambientSound = new AmbientSoundGenerator();
   }
 
   setupEventListeners() {
@@ -53,6 +55,22 @@ class FocusPageManager {
       btn.addEventListener('click', () => {
         const mins = parseInt(btn.dataset.mins, 10);
         this.setPomodoroPreset(mins);
+      });
+    });
+
+    this.elements.soundBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const soundType = btn.dataset.sound;
+        this.elements.soundBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        if (soundType === 'rain') {
+          this.ambientSound.playRain();
+        } else if (soundType === 'alpha') {
+          this.ambientSound.playAlphaWave();
+        } else {
+          this.ambientSound.stop();
+        }
       });
     });
 
@@ -200,6 +218,95 @@ class FocusPageManager {
 
   setPomodoroPreset(mins) {
     chrome.runtime.sendMessage({ type: 'POMODORO_SET_PRESET', mins }).catch(() => {});
+  }
+}
+
+class AmbientSoundGenerator {
+  constructor() {
+    this.audioCtx = null;
+    this.noiseNode = null;
+    this.gainNode = null;
+    this.isPlaying = false;
+    this.currentType = 'none';
+  }
+
+  initContext() {
+    if (!this.audioCtx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.audioCtx = new AudioCtx();
+    }
+  }
+
+  playRain() {
+    this.stop();
+    this.initContext();
+    const bufferSize = this.audioCtx.sampleRate * 2;
+    const buffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    let lastOut = 0.0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      data[i] = (lastOut + (0.02 * white)) / 1.02;
+      lastOut = data[i];
+      data[i] *= 3.5;
+    }
+
+    const bufferSource = this.audioCtx.createBufferSource();
+    bufferSource.buffer = buffer;
+    bufferSource.loop = true;
+
+    const filter = this.audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(800, this.audioCtx.currentTime);
+
+    this.gainNode = this.audioCtx.createGain();
+    this.gainNode.gain.setValueAtTime(0.08, this.audioCtx.currentTime);
+
+    bufferSource.connect(filter);
+    filter.connect(this.gainNode);
+    this.gainNode.connect(this.audioCtx.destination);
+
+    bufferSource.start();
+    this.noiseNode = bufferSource;
+    this.isPlaying = true;
+    this.currentType = 'rain';
+  }
+
+  playAlphaWave() {
+    this.stop();
+    this.initContext();
+
+    const osc1 = this.audioCtx.createOscillator();
+    const osc2 = this.audioCtx.createOscillator();
+    this.gainNode = this.audioCtx.createGain();
+
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(200, this.audioCtx.currentTime);
+
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(210, this.audioCtx.currentTime);
+
+    this.gainNode.gain.setValueAtTime(0.06, this.audioCtx.currentTime);
+
+    osc1.connect(this.gainNode);
+    osc2.connect(this.gainNode);
+    this.gainNode.connect(this.audioCtx.destination);
+
+    osc1.start();
+    osc2.start();
+
+    this.noiseNode = { stop: () => { osc1.stop(); osc2.stop(); } };
+    this.isPlaying = true;
+    this.currentType = 'alpha';
+  }
+
+  stop() {
+    if (this.noiseNode && this.isPlaying) {
+      try { this.noiseNode.stop(); } catch (e) {}
+      this.isPlaying = false;
+      this.currentType = 'none';
+    }
   }
 }
 

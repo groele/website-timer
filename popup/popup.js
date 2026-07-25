@@ -148,6 +148,7 @@ class PopupManager {
       detailChartSvg: document.getElementById('detailChartSvg'),
       detailNoteInput: document.getElementById('detailNoteInput'),
       saveDetailNoteBtn: document.getElementById('saveDetailNoteBtn'),
+      detailCategorySelect: document.getElementById('detailCategorySelect'),
       pomoBlockDistractToggle: document.getElementById('pomoBlockDistractToggle'),
 
       weeklyGoalProgressText: document.getElementById('weeklyGoalProgressText'),
@@ -1326,6 +1327,18 @@ class PopupManager {
 
     if (this.elements.detailNoteInput) {
       this.elements.detailNoteInput.value = this.settings.siteNotes?.[domain] || '';
+    }
+
+    if (this.elements.detailCategorySelect) {
+      this.elements.detailCategorySelect.value = this.settings.customCategories?.[domain] || data.category || 'other';
+      this.elements.detailCategorySelect.onchange = (e) => {
+        const newCat = e.target.value;
+        if (!this.settings.customCategories) this.settings.customCategories = {};
+        this.settings.customCategories[domain] = newCat;
+        this.updateSetting('customCategories', this.settings.customCategories);
+        this.renderStatsTab();
+        this.showToast(`已将 ${domain} 重新分类`, 'success');
+      };
     }
 
     const avgSessionMs = Math.round(data.timeSpent / (data.visits || 1));
