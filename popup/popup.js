@@ -128,6 +128,7 @@ class PopupManager {
       exportDataBtn: document.getElementById('exportDataBtn'),
       exportCsvBtn: document.getElementById('exportCsvBtn'),
       exportMdBtn: document.getElementById('exportMdBtn'),
+      exportHtmlBtn: document.getElementById('exportHtmlBtn'),
       importDataBtn: document.getElementById('importDataBtn'),
       purgeShortBtn: document.getElementById('purgeShortBtn'),
       importFileInput: document.getElementById('importFileInput'),
@@ -296,6 +297,9 @@ class PopupManager {
     this.elements.exportCsvBtn.addEventListener('click', () => this.exportCSVData());
     if (this.elements.exportMdBtn) {
       this.elements.exportMdBtn.addEventListener('click', () => this.exportMarkdownReport());
+    }
+    if (this.elements.exportHtmlBtn) {
+      this.elements.exportHtmlBtn.addEventListener('click', () => this.exportHTMLReport());
     }
     if (this.elements.saveDetailNoteBtn) {
       this.elements.saveDetailNoteBtn.addEventListener('click', () => this.saveSiteNote());
@@ -1903,6 +1907,124 @@ class PopupManager {
       console.error(e);
       this.showToast('Markdown 导出失败', 'error');
     }
+  }
+
+  exportHTMLReport() {
+    try {
+      const { aggregatedDomains, totalMs } = this.getProcessedPeriodData();
+      const domainList = Object.values(aggregatedDomains);
+
+      if (domainList.length === 0) {
+        this.showToast('暂无数据可导出为 HTML 报告', 'error');
+        return;
+      }
+
+      domainList.sort((a, b) => b.timeSpent - a.timeSpent);
+
+      const periodNames = { today: '今日', yesterday: '昨日', week: '近 7 天', month: '近 30 天', all: '全部历史' };
+      const periodLabel = periodNames[this.currentPeriod] || '统计';
+
+      const catLabels = {
+        academic: '🎓 学术科研', work: '💻 工作学习', social: '💬 社交通讯', video: '📹 视频娱乐',
+        shopping: '🛍️ 购物消费', news: '📰 新闻资讯', other: '🌐 其他网页'
+      };
+
+      let rows = domainList.map((item, index) => {
+        const catName = catLabels[item.category] || '其他';
+        const durationStr = this.formatDuration(item.timeSpent);
+        const note = this.settings.siteNotes?.[item.domain] || '-';
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td><strong>${item.domain}</strong></td>
+            <td>${catName}</td>
+            <td>${durationStr}</td>
+            <td>${item.visits || 1} 次</td>
+            <td>${note}</td>
+          </tr>
+        `;
+      }).join('');
+
+      let htmlContent = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>网页使用时长与科研专注 ${periodLabel}报告 - ${this.getTodayKey()}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; max-width: 900px; margin: 0 auto; line-height: 1.6; }
+    h1 { color: #a855f7; border-bottom: 2px solid #334155; padding-bottom: 12px; }
+    .card { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #334155; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #334155; font-size: 14px; }
+    th { background: #334155; color: #a855f7; }
+    .footer { font-size: 12px; opacity: 0.6; text-align: center; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <h1>🎓 网页使用时长与科研专注 ${periodLabel}报告</h1>
+  <div class="card">
+    <h3>📊 总体统计数据 (${this.getTodayKey()})</h3>
+    <p>总浏览时长: <strong>${this.formatDuration(totalMs)}</strong></p>
+  </div>
+  <div class="card">
+    <h3>🏆 常用网站列表与科研课题笔记</h3>
+    <table>
+      <thead>
+        <tr><th>#</th><th>域名</th><th>分类</th><th>使用时长</th><th>访问次数</th><th>科研课题笔记</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+  <div class="footer">由 [网站使用时长统计器 - 博士科研版] 自动生成于 ${new Date().toLocaleString('zh-CN')}</div>
+</body>
+</html>`;
+
+      const encodedUri = "data:text/html;charset=utf-8," + encodeURIComponent(htmlContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `website-timer-phd-report-${this.getTodayKey()}.html`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      this.showToast('HTML 精美可视化报告导出成功！', 'success');
+    } catch (e) {
+      this.showToast('HTML 报告导出失败', 'error');
+    }
+  }
+
+  async purgeShortVisits() {
+    this.showConfirmModal('清理无意义短时间访问', '确定要清理所有停留时间小于 10 秒的偶发网页记录吗？这可以有效提升统计呈现的纯净度。', async () => {
+      try {
+        const res = await chrome.storage.local.get(null);
+        const updates = {};
+        let count = 0;
+
+        Object.keys(res).forEach(k => {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(k)) {
+            const dayObj = res[k];
+            if (dayObj && typeof dayObj === 'object') {
+              const cleanObj = {};
+              Object.entries(dayObj).forEach(([domain, data]) => {
+                if (domain === '_timeline') {
+                  cleanObj._timeline = data;
+                } else if (data && data.timeSpent >= 10000) {
+                  cleanObj[domain] = data;
+                } else {
+                  count++;
+                }
+              });
+              updates[k] = cleanObj;
+            }
+          }
+        });
+
+        await chrome.storage.local.set(updates);
+        await this.loadAllData();
+        this.showToast(`清理完成！已净化 ${count} 条少于 10 秒的偶发网页记录`, 'success');
+      } catch (e) {
+        this.showToast('清理短时间记录失败', 'error');
+      }
+    });
   }
 
   importJSONData(event) {
