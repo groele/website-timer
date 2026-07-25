@@ -211,9 +211,21 @@ class WebsiteTimer {
       if (!message) return true;
 
       if (message.type === 'PAGE_ACTIVITY_STATUS') {
-        if (message.data && message.data.isActive && this.activeTabInfo && sender.tab && sender.tab.id === this.activeTabInfo.tabId) {
+        if (message.data && sender.tab && this.activeTabInfo && sender.tab.id === this.activeTabInfo.tabId) {
           if (message.data.title) {
             this.activeTabInfo.title = message.data.title;
+          }
+          if (message.data.isActive) {
+            if (!this.isUserActive) {
+              this.isUserActive = true;
+              this.lastActiveTime = Date.now();
+            }
+          } else {
+            if (this.isUserActive) {
+              this.saveTimeSpent();
+              this.isUserActive = false;
+              this.lastActiveTime = null;
+            }
           }
         }
         sendResponse({ success: true });

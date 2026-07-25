@@ -40,7 +40,8 @@ class PageActivityDetector {
   reportActivity() {
     const now = Date.now();
     const timeSinceLastActivity = now - this.lastActivityTime;
-    const isActivelyUsing = this.isPageVisible && timeSinceLastActivity < 10000;
+    // 45 秒内有鼠标/键盘/滚轮/点击操作且页面在前台可视，才判定为真实活跃操作
+    const isActivelyUsing = this.isPageVisible && (timeSinceLastActivity < 45000);
 
     try {
       chrome.runtime.sendMessage({
@@ -59,7 +60,7 @@ class PageActivityDetector {
   startActivityReporting() {
     setInterval(() => {
       this.reportActivity();
-    }, 30000);
+    }, 5000);
 
     if (document.readyState === 'complete') {
       this.reportActivity();
