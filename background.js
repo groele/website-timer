@@ -8,6 +8,7 @@ class WebsiteTimer {
     this.isUserActive = true;
     this.isSaving = false;
     this.currentDay = this.getTodayKey();
+    this.storageQueue = Promise.resolve();
     
     this.defaultSettings = {
       blackList: ['newtab', 'extensions', 'devtools', 'localhost', '127.0.0.1'],
@@ -51,6 +52,16 @@ class WebsiteTimer {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  runInStorageQueue(task) {
+    if (!this.storageQueue) {
+      this.storageQueue = Promise.resolve();
+    }
+    this.storageQueue = this.storageQueue.then(() => task()).catch((err) => {
+      console.error('存储队列任务异常:', err);
+    });
+    return this.storageQueue;
   }
 
   extractDomain(url) {
