@@ -501,6 +501,7 @@ class PopupManager {
   }
 
   renderStatsTab() {
+    this.updateCurrentDateDisplay();
     const { dates, aggregatedDomains, periodData } = this.getProcessedPeriodData();
     this.renderWeeklyGoalProgress();
     this.renderMetrics(dates, aggregatedDomains);
@@ -609,15 +610,31 @@ class PopupManager {
     return { dates, aggregatedDomains, periodData };
   }
 
-  // 📜 渲染 24小时 Chronological 浏览时间轴日志
+  formatTimestampDate(ts) {
+    if (!ts) return this.getTodayKey();
+    const d = new Date(ts);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // 📜 渲染 Chronological 浏览时间轴日志 (按日期分组精细区分)
   renderTimeline() {
     const { dates } = this.getProcessedPeriodData();
     let events = [];
+    const todayKey = this.getTodayKey();
+    const yesterdayKey = this.getDateKeyOffset(1);
 
     dates.forEach(dKey => {
       const dayObj = this.rawData[dKey] || {};
       const timelineArr = dayObj._timeline || [];
-      events = events.concat(timelineArr);
+      timelineArr.forEach(item => {
+        events.push({
+          ...item,
+          dateKey: dKey
+        });
+      });
     });
 
     if (this.currentCategory !== 'all') {
@@ -644,14 +661,34 @@ class PopupManager {
 
     emptyState.style.display = 'none';
 
-    container.innerHTML = events.map(ev => {
+    let html = '';
+    let lastDateGroup = null;
+
+    events.forEach(ev => {
+      const dKey = ev.dateKey || (ev.timestamp ? this.formatTimestampDate(ev.timestamp) : todayKey);
+      if (dKey !== lastDateGroup) {
+        lastDateGroup = dKey;
+        let dateTagLabel = dKey;
+        if (dKey === todayKey) dateTagLabel = `📅 今日 (${dKey})`;
+        else if (dKey === yesterdayKey) dateTagLabel = `📅 昨日 (${dKey})`;
+        else dateTagLabel = `📅 ${dKey}`;
+
+        html += `
+          <div class="timeline-date-group-header" style="font-size:12px; font-weight:700; color:var(--primary); margin: 10px 0 6px 0; padding-bottom:4px; border-bottom: 1px dashed rgba(255,255,255,0.15);">
+            ${dateTagLabel}
+          </div>
+        `;
+      }
+
       const durStr = this.formatDuration(ev.durationMs);
       const safeDomain = this.escapeHtml(ev.domain);
       const safeTitle = this.escapeHtml(ev.title || ev.domain);
-      return `
+      const timeStr = this.escapeHtml(ev.time || '12:00');
+
+      html += `
         <div class="timeline-item">
           <div class="timeline-dot"></div>
-          <div class="timeline-time">${this.escapeHtml(ev.time || '12:00')}</div>
+          <div class="timeline-time">${timeStr}</div>
           <div class="timeline-content">
             <div class="timeline-header-row">
               <span class="timeline-domain">${safeDomain}</span>
@@ -661,7 +698,9 @@ class PopupManager {
           </div>
         </div>
       `;
-    }).join('');
+    });
+
+    container.innerHTML = html;
   }
 
   renderSmartInsights(aggregatedDomains) {
@@ -1884,7 +1923,13 @@ class PopupManager {
   updateCurrentDateDisplay() {
     const now = new Date();
     const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-    this.elements.currentDateDisplay.textContent = dateStr;
+    let periodLabel = '今日';
+    if (this.currentPeriod === 'yesterday') periodLabel = `昨日 (${this.getDateKeyOffset(1)})`;
+    else if (this.currentPeriod === 'week') periodLabel = '近 7 天';
+    else if (this.currentPeriod === 'month') periodLabel = '近 30 天';
+    else if (this.currentPeriod === 'all') periodLabel = '全部历史';
+
+    this.elements.currentDateDisplay.textContent = `${dateStr} • 【${periodLabel}】`;
   }
 
   updateLastUpdateTime() {

@@ -359,8 +359,12 @@ class WebsiteTimer {
 
         const today = this.getTodayKey();
         if (today !== this.currentDay) {
-          await this.resetDailyData();
           this.currentDay = today;
+          this.continuousActiveTime = 0;
+          if (this.settings) {
+            this.settings.notifiedLimits = {};
+            await chrome.storage.local.set({ timer_settings: this.settings });
+          }
         }
 
         const chunks = this.splitDurationByHourAndDay(startTime, now);
@@ -405,6 +409,7 @@ class WebsiteTimer {
             lastEvent.timestamp = now;
           } else {
             dayData._timeline.push({
+              date: dateKey,
               time: timeString,
               timestamp: now,
               domain: domain,
