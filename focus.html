@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎓 沉浸科研专注空间 - Website Timer</title>
+  <link rel="stylesheet" href="focus.css">
+</head>
+<body>
+  <!-- 动态沉浸背景氛围圈 -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <!-- 主体卡片容器 -->
+  <div class="focus-container">
+    <button id="exitBtn" class="top-btn exit-btn" title="退出沉浸模式 (Esc)">✕ 退出</button>
+    <button id="toggleFullscreenBtn" class="top-btn fullscreen-btn" title="切换浏览器全屏 (F11)">🖥️ 切换网页全屏</button>
+
+    <div class="focus-icon">🎓</div>
+    <h1 class="focus-title">沉浸科研专注阶段</h1>
+    
+    <div class="quote-wrapper">
+      <p id="quoteText" class="quote-text">“科研是一场马拉松，唯有沉心专注，方能登峰造极。”</p>
+      <button id="nextQuoteBtn" class="quote-btn" title="换一句灵感名言">🎲 换一句</button>
+    </div>
+
+    <!-- 巨大高亮质感数字钟 -->
+    <div class="timer-card">
+      <div id="focusTimerDisplay" class="timer-digits">25:00</div>
+      <div id="focusStatusText" class="timer-status">准备就绪</div>
+    </div>
+
+    <!-- 预设选择器与控制区 -->
+    <div class="preset-row">
+      <button class="preset-btn active" data-mins="25">📖 25m速读</button>
+      <button class="preset-btn" data-mins="45">🔬 45m深度研读</button>
+      <button class="preset-btn" data-mins="60">✍️ 60m论文写作</button>
+    </div>
+
+    <div class="control-row">
+      <button id="focusStartBtn" class="btn btn-primary btn-glow">▶ 开始专注</button>
+      <button id="focusResetBtn" class="btn btn-secondary">🔄 重置</button>
+    </div>
+
+    <div class="focus-footer">
+      <span>🛡️ 防打扰提醒已启用 • 快捷键 Esc 退出沉浸模式</span>
+    </div>
+  </div>
+
+  <script src="focus.js"></script>
+</body>
+</html>

@@ -314,10 +314,7 @@ class PopupManager {
     }
     if (this.elements.pomoFullscreenBtn) {
       this.elements.pomoFullscreenBtn.addEventListener('click', () => {
-        if (this.elements.overlayQuoteText) {
-          this.elements.overlayQuoteText.textContent = this.getRandomQuote();
-        }
-        if (this.elements.pomoFocusOverlay) this.elements.pomoFocusOverlay.style.display = 'flex';
+        chrome.tabs.create({ url: 'focus.html' });
       });
     }
     if (this.elements.closeFocusOverlay) {
