@@ -9,7 +9,7 @@ class PopupManager {
     this.currentView = 'list'; // 'list' | 'timeline'
     this.searchQuery = '';
     this.selectedTag = 'all';
-    
+
     this.rawData = {};
     this.settings = {};
 
@@ -61,7 +61,7 @@ class PopupManager {
     this.elements = {
       navBtns: document.querySelectorAll('.nav-btn'),
       tabContents: document.querySelectorAll('.tab-content'),
-      
+
       smartInsightsText: document.getElementById('smartInsightsText'),
       heatmapGrid: document.getElementById('heatmapGrid'),
 
@@ -74,11 +74,11 @@ class PopupManager {
       metricTopTime: document.getElementById('metricTopTime'),
       metricFocusScore: document.getElementById('metricFocusScore'),
       metricScoreRating: document.getElementById('metricScoreRating'),
-      
+
       chartTitle: document.getElementById('chartTitle'),
       chartBtns: document.querySelectorAll('.chart-btn'),
       chartSvg: document.getElementById('chartSvg'),
-      
+
       // 视图切换
       viewBtns: document.querySelectorAll('.view-btn'),
       listViewSection: document.getElementById('listViewSection'),
@@ -90,7 +90,7 @@ class PopupManager {
       sortSelect: document.getElementById('sortSelect'),
       websitesList: document.getElementById('websitesList'),
       emptyState: document.getElementById('emptyState'),
-      
+
       pomoPresetBtns: document.querySelectorAll('.pomo-preset-btn'),
       pomoTimerDisplay: document.getElementById('pomoTimerDisplay'),
       pomoStatusText: document.getElementById('pomoStatusText'),
@@ -112,7 +112,7 @@ class PopupManager {
       domainLimitTime: document.getElementById('domainLimitTime'),
       addDomainLimitBtn: document.getElementById('addDomainLimitBtn'),
       domainLimitsList: document.getElementById('domainLimitsList'),
-      
+
       pauseTimerToggle: document.getElementById('pauseTimerToggle'),
       breakReminderSelect: document.getElementById('breakReminderSelect'),
       subdomainGroupToggle: document.getElementById('subdomainGroupToggle'),
@@ -125,7 +125,7 @@ class PopupManager {
       blacklistTags: document.getElementById('blacklistTags'),
       themeCards: document.querySelectorAll('.theme-card'),
       retentionSelect: document.getElementById('retentionSelect'),
-      
+
       exportDataBtn: document.getElementById('exportDataBtn'),
       exportCsvBtn: document.getElementById('exportCsvBtn'),
       exportMdBtn: document.getElementById('exportMdBtn'),
@@ -135,15 +135,15 @@ class PopupManager {
       importFileInput: document.getElementById('importFileInput'),
       resetTodayBtn: document.getElementById('resetTodayBtn'),
       clearAllBtn: document.getElementById('clearAllBtn'),
-      
+
       currentDateDisplay: document.getElementById('currentDateDisplay'),
       lastUpdateTime: document.getElementById('lastUpdateTime'),
       refreshDataBtn: document.getElementById('refreshDataBtn'),
       toastContainer: document.getElementById('toastContainer'),
-      
+
       trackerStatusBadge: document.getElementById('trackerStatusBadge'),
       detailTimelineList: document.getElementById('detailTimelineList'),
-      
+
       domainDetailModal: document.getElementById('domainDetailModal'),
       closeDetailModal: document.getElementById('closeDetailModal'),
       detailDomainName: document.getElementById('detailDomainName'),
@@ -284,7 +284,7 @@ class PopupManager {
 
     this.elements.addCustomCatBtn.addEventListener('click', () => this.addCustomCategory());
     this.elements.addBlacklistBtn.addEventListener('click', () => this.addBlacklistDomain());
-    
+
     this.elements.themeCards.forEach(card => {
       card.addEventListener('click', () => {
         const themeVal = card.dataset.themeVal;
@@ -364,7 +364,7 @@ class PopupManager {
     this.elements.importDataBtn.addEventListener('click', () => this.elements.importFileInput.click());
     this.elements.purgeShortBtn.addEventListener('click', () => this.purgeShortVisits());
     this.elements.importFileInput.addEventListener('change', (e) => this.importJSONData(e));
-    
+
     this.elements.resetTodayBtn.addEventListener('click', () => {
       this.showConfirmModal('重置今日数据', '确定要清空今日的所有浏览记录吗？此操作不可撤销。', () => this.resetTodayData());
     });
@@ -417,6 +417,41 @@ class PopupManager {
         this.elements.domainDetailModal.style.display = 'none';
       }
     });
+
+    // 📜 点击 24小时时间轴日志 记录，在新标签页跳转到对应的网页
+    if (this.elements.timelineList) {
+      this.elements.timelineList.addEventListener('click', (e) => {
+        const linkEl = e.target.closest('.timeline-item-clickable');
+        if (linkEl) {
+          const url = linkEl.getAttribute('href');
+          if (url && url !== '#') {
+            e.preventDefault();
+            if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
+              chrome.tabs.create({ url: url });
+            } else {
+              window.open(url, '_blank');
+            }
+          }
+        }
+      });
+    }
+
+    if (this.elements.detailTimelineList) {
+      this.elements.detailTimelineList.addEventListener('click', (e) => {
+        const linkEl = e.target.closest('.detail-timeline-item-clickable');
+        if (linkEl) {
+          const url = linkEl.getAttribute('href');
+          if (url && url !== '#') {
+            e.preventDefault();
+            if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
+              chrome.tabs.create({ url: url });
+            } else {
+              window.open(url, '_blank');
+            }
+          }
+        }
+      });
+    }
 
     this.elements.refreshDataBtn.addEventListener('click', () => {
       this.loadAllData();
@@ -479,14 +514,14 @@ class PopupManager {
     if (this.elements.weeklyGoalSelect && this.settings.weeklyAcademicGoalHours) {
       this.elements.weeklyGoalSelect.value = this.settings.weeklyAcademicGoalHours.toString();
     }
-    
+
     if (this.settings.breakReminderMins !== undefined) {
       this.elements.breakReminderSelect.value = this.settings.breakReminderMins.toString();
     }
 
     const globalMins = this.settings.dailyLimits?.global ? Math.round(this.settings.dailyLimits.global / 60000) : 0;
     this.elements.globalLimitInput.value = globalMins || '';
-    
+
     const theme = this.settings.theme || 'sunset';
     this.applyTheme(theme);
 
@@ -558,7 +593,7 @@ class PopupManager {
     this.renderMetrics(dates, aggregatedDomains);
     this.renderSmartInsights(aggregatedDomains);
     this.renderChartSection(periodData, aggregatedDomains);
-    
+
     if (this.currentView === 'list') {
       this.renderWebsitesList(aggregatedDomains);
     } else {
@@ -568,12 +603,12 @@ class PopupManager {
 
   renderWeeklyGoalProgress() {
     if (!this.elements.weeklyGoalProgressText || !this.elements.weeklyGoalProgressBar) return;
-    
+
     const last7Days = [];
     for (let i = 6; i >= 0; i--) {
       last7Days.push(this.getDateKeyOffset(i));
     }
-    
+
     let academicMs = 0;
     last7Days.forEach(dKey => {
       const dayObj = this.rawData[dKey];
@@ -588,11 +623,11 @@ class PopupManager {
         });
       }
     });
-    
+
     const academicHours = (academicMs / 3600000).toFixed(1);
     const targetHours = this.settings.weeklyAcademicGoalHours || 20;
     const pct = Math.min(100, Math.round((academicHours / targetHours) * 100));
-    
+
     this.elements.weeklyGoalProgressText.textContent = `${academicHours} / ${targetHours} 小时 (${pct}%)`;
     this.elements.weeklyGoalProgressBar.style.width = `${pct}%`;
   }
@@ -644,7 +679,7 @@ class PopupManager {
         aggregatedDomains[domain].timeSpent += timeSpent;
         aggregatedDomains[domain].visits += visits;
         if (data.lastTitle) aggregatedDomains[domain].lastTitle = data.lastTitle;
-        
+
         if (data.hourlyUsage) {
           for (let h = 0; h < 24; h++) {
             aggregatedDomains[domain].hourlyUsage[h] += (data.hourlyUsage[h] || 0);
@@ -693,7 +728,7 @@ class PopupManager {
     }
 
     if (this.searchQuery) {
-      events = events.filter(e => 
+      events = events.filter(e =>
         e.domain.toLowerCase().includes(this.searchQuery) ||
         (e.title && e.title.toLowerCase().includes(this.searchQuery))
       );
@@ -736,18 +771,24 @@ class PopupManager {
       const safeTitle = this.escapeHtml(ev.title || ev.domain);
       const timeStr = this.escapeHtml(ev.time || '12:00');
 
+      let rawUrl = ev.url || ev.domain;
+      if (rawUrl && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+        rawUrl = 'https://' + rawUrl;
+      }
+      const safeUrl = this.escapeHtml(rawUrl);
+
       html += `
-        <div class="timeline-item">
+        <a class="timeline-item timeline-item-clickable" href="${safeUrl}" target="_blank" rel="noopener noreferrer" title="点击跳转至网页：${safeUrl}">
           <div class="timeline-dot"></div>
           <div class="timeline-time">${timeStr}</div>
           <div class="timeline-content">
             <div class="timeline-header-row">
-              <span class="timeline-domain">${safeDomain}</span>
+              <span class="timeline-domain">${safeDomain} <span class="timeline-link-icon">↗</span></span>
               <span class="timeline-dur">+${durStr}</span>
             </div>
             <div class="timeline-page-title truncate">${safeTitle}</div>
           </div>
-        </div>
+        </a>
       `;
     });
 
@@ -875,8 +916,8 @@ class PopupManager {
 
     if (this.elements.nextLevelText) {
       const need = Math.max(0, targetDays - displayStreak);
-      this.elements.nextLevelText.textContent = displayStreak >= 60 ? 
-        '👑 已解锁终极成就' : 
+      this.elements.nextLevelText.textContent = displayStreak >= 60 ?
+        '👑 已解锁终极成就' :
         `下一等级: ${nextLevelName} (还需${need}天)`;
     }
 
@@ -916,7 +957,7 @@ class PopupManager {
 
     this.elements.metricTotalTime.textContent = this.formatDuration(totalMs);
     this.elements.metricAcademicTime.textContent = this.formatDuration(academicMs);
-    
+
     const acadRatio = totalMs > 0 ? ((academicMs / totalMs) * 100).toFixed(1) : '0';
     this.elements.metricAcademicCount.textContent = `科研占比 ${acadRatio}%`;
 
@@ -1092,7 +1133,7 @@ class PopupManager {
     });
 
     const barWidth = Math.max(4, Math.floor((width - padding * 2) / entries.length) - 4);
-    
+
     entries.forEach(([dKey, val], index) => {
       const mins = val.totalTime / 60000;
       const barHeight = Math.max(3, (mins / maxMinutes) * (height - padding * 2));
@@ -1186,7 +1227,7 @@ class PopupManager {
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       const totalMins = Math.round(valMs / 60000);
       const acadMins = Math.round(acadMs / 60000);
-      title.textContent = `${hour}:00 - ${hour+1}:00 : 🎓科研 ${acadMins}m / 总计 ${totalMins}m`;
+      title.textContent = `${hour}:00 - ${hour + 1}:00 : 🎓科研 ${acadMins}m / 总计 ${totalMins}m`;
       hitRect.appendChild(title);
 
       svg.appendChild(hitRect);
@@ -1298,7 +1339,7 @@ class PopupManager {
     let legY = 12;
     cats.filter(c => c.ms > 0).forEach(cat => {
       const pct = ((cat.ms / totalMs) * 100).toFixed(1);
-      
+
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('x', '160');
       rect.setAttribute('y', legY);
@@ -1334,8 +1375,8 @@ class PopupManager {
     }
 
     if (this.searchQuery) {
-      domainList = domainList.filter(d => 
-        d.domain.toLowerCase().includes(this.searchQuery) || 
+      domainList = domainList.filter(d =>
+        d.domain.toLowerCase().includes(this.searchQuery) ||
         (d.lastTitle && d.lastTitle.toLowerCase().includes(this.searchQuery))
       );
     }
@@ -1485,7 +1526,7 @@ class PopupManager {
 
     const svg = this.elements.detailChartSvg;
     svg.innerHTML = '';
-    
+
     const last7Days = [];
     for (let i = 6; i >= 0; i--) {
       last7Days.push(this.getDateKeyOffset(i));
@@ -1598,7 +1639,7 @@ class PopupManager {
       if (res.pomodoro_state) {
         this.syncPomodoroUI(res.pomodoro_state);
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   playPomodoroChime() {
@@ -1606,7 +1647,7 @@ class PopupManager {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
-      
+
       const playNote = (freq, startTime, duration) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -1624,7 +1665,7 @@ class PopupManager {
       playNote(523.25, now, 0.4);       // C5
       playNote(659.25, now + 0.15, 0.4); // E5
       playNote(783.99, now + 0.3, 0.8);  // G5
-    } catch (e) {}
+    } catch (e) { }
   }
 
   getRandomQuote() {
@@ -1702,23 +1743,23 @@ class PopupManager {
   }
 
   setPomodoroPreset(mins) {
-    chrome.runtime.sendMessage({ type: 'POMODORO_SET_PRESET', mins }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'POMODORO_SET_PRESET', mins }).catch(() => { });
     this.showToast(`番茄钟设定为 ${mins} 分钟`, 'info');
   }
 
   togglePomodoro() {
-    chrome.runtime.sendMessage({ type: 'POMODORO_TOGGLE' }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'POMODORO_TOGGLE' }).catch(() => { });
   }
 
   resetPomodoro() {
-    chrome.runtime.sendMessage({ type: 'POMODORO_RESET' }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'POMODORO_RESET' }).catch(() => { });
     this.showToast('番茄钟已重置', 'info');
   }
 
   saveGlobalLimit() {
     const val = parseInt(this.elements.globalLimitInput.value, 10) || 0;
     const ms = val * 60000;
-    
+
     if (!this.settings.dailyLimits) this.settings.dailyLimits = {};
     this.settings.dailyLimits.global = ms;
 
@@ -1740,7 +1781,7 @@ class PopupManager {
 
     this.settings.dailyLimits.domains[domain] = mins * 60000;
     this.updateSetting('dailyLimits', this.settings.dailyLimits);
-    
+
     this.elements.domainLimitName.value = '';
     this.elements.domainLimitTime.value = '';
     this.renderDomainLimitsList();
@@ -1759,7 +1800,7 @@ class PopupManager {
 
     container.innerHTML = entries.map(([domain, ms]) => `
       <div class="limit-item">
-        <span><b>${domain}</b> : ${Math.round(ms/60000)} 分钟/天</span>
+        <span><b>${domain}</b> : ${Math.round(ms / 60000)} 分钟/天</span>
         <button class="icon-btn" data-del-domain="${domain}">❌</button>
       </div>
     `).join('');
@@ -2325,28 +2366,45 @@ class PopupManager {
 
     const sorted = [...domainEvents].reverse();
     sorted.forEach(evt => {
-      const itemEl = document.createElement('div');
+      let rawUrl = evt.url || evt.domain || domain;
+      if (rawUrl && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+        rawUrl = 'https://' + rawUrl;
+      }
+      const safeUrl = this.escapeHtml(rawUrl);
+
+      const itemEl = document.createElement('a');
+      itemEl.className = 'detail-timeline-item-clickable';
+      itemEl.href = safeUrl;
+      itemEl.target = '_blank';
+      itemEl.rel = 'noopener noreferrer';
+      itemEl.title = `点击跳转至网页：${safeUrl}`;
       itemEl.style.cssText = `
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 4px 8px;
+        padding: 5px 8px;
         background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 4px;
         gap: 8px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
       `;
 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'truncate';
       titleSpan.style.flex = '1';
       titleSpan.style.color = 'var(--text-main)';
+      titleSpan.style.fontSize = '11px';
       titleSpan.title = evt.title || domain;
-      titleSpan.textContent = `${evt.time || ''} - ${evt.title || domain}`;
+      titleSpan.innerHTML = `${this.escapeHtml(evt.time || '')} - ${this.escapeHtml(evt.title || domain)} <span style="font-size:10px; opacity:0.6;">↗</span>`;
 
       const durationSpan = document.createElement('span');
       durationSpan.style.color = 'var(--primary)';
       durationSpan.style.fontWeight = '600';
       durationSpan.style.whiteSpace = 'nowrap';
+      durationSpan.style.fontSize = '11px';
       durationSpan.textContent = this.formatDuration(evt.durationMs || 0);
 
       itemEl.appendChild(titleSpan);

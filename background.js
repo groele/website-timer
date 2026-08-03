@@ -452,12 +452,15 @@ class WebsiteTimer {
           if (lastEvent && lastEvent.domain === domain && (now - (lastEvent.timestamp || 0) < 120000)) {
             lastEvent.durationMs = (lastEvent.durationMs || 0) + durationMs;
             lastEvent.timestamp = now;
+            if (activeTab.url) lastEvent.url = activeTab.url;
+            if (tabTitle) lastEvent.title = tabTitle;
           } else {
             dayData._timeline.push({
               date: dateKey,
               time: timeString,
               timestamp: now,
               domain: domain,
+              url: activeTab.url,
               title: tabTitle,
               durationMs: durationMs,
               category: category
