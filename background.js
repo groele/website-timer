@@ -772,12 +772,6 @@ class WebsiteTimer {
     await chrome.storage.local.set({ pomodoro_state: this.pomodoro });
   }
 
-  async forceSave() {
-    if (this.activeTabInfo && this.lastActiveTime && this.isUserActive) {
-      await this.saveTimeSpent();
-    }
-  }
-
   checkDailyRollover() {
     const today = this.getTodayKey();
     if (today !== this.currentDay) {
@@ -787,6 +781,7 @@ class WebsiteTimer {
         this.settings.notifiedLimits = {};
         chrome.storage.local.set({ timer_settings: this.settings });
       }
+      this.resetDailyData();
       this.updateBadge({});
     }
   }
@@ -822,11 +817,13 @@ setInterval(() => {
 chrome.runtime.onStartup.addListener(() => {
   console.log('网站使用时长统计器已启动');
   websiteTimer.checkDailyRollover();
+  websiteTimer.resetDailyData();
   websiteTimer.syncCurrentActiveTab();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('网站使用时长统计器已安装/重载');
   websiteTimer.checkDailyRollover();
+  websiteTimer.resetDailyData();
   websiteTimer.syncCurrentActiveTab();
 });
